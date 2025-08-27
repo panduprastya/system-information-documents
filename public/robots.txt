@@ -1,0 +1,8 @@
+User-agent: *
+Disallow: /admin/
+Disallow: /storage/
+Disallow: /vendor/
+
+Sitemap: {{ url('/sitemap.xml') }}
+
+# Pertamina Patra Niaga - Sistem Manajemen Dokumen
