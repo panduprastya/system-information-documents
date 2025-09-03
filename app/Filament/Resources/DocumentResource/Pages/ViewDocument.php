@@ -40,28 +40,25 @@ class ViewDocument extends ViewRecord
 			Actions\EditAction::make()
 				->visible(function () {
 					$user = auth()->user();
-					// Admin cannot edit documents, only view them
+					// Hide for HSSE on view page
+					if ($user && $user->hasRole('HSSE')) {
+						return false;
+					}
+					// Admin cannot edit here
 					if ($user && $user->hasRole('Admin')) {
 						return false;
 					}
-					
-					// Mitra can edit documents if either status is revisi, or if both are not approved
+					// Mitra follows same rule as list page
 					if ($user && $user->hasRole('Mitra')) {
-						$hasRevisiStatus = $this->record->hsse_status === 'revisi' || $this->record->snd_status === 'revisi';
-						$bothApproved = $this->record->hsse_status === 'approved' && $this->record->snd_status === 'approved';
-						$bothPendingOrRevisi = ($this->record->hsse_status === 'pending' || $this->record->hsse_status === 'revisi') && 
-										   ($this->record->snd_status === 'pending' || $this->record->snd_status === 'revisi');
-						
-						// Hide edit button when both statuses are pending or revisi (show only review button)
-						if ($bothPendingOrRevisi) {
-							return false;
-						}
-						
-						return $hasRevisiStatus || !$bothApproved;
+						$hsse = $this->record->hsse_status;
+						$snd = $this->record->snd_status;
+						$allowed = fn(string $s) => in_array($s, ['pending','revisi'], true);
+						$blocked = fn(string $s) => in_array($s, ['reviewing','rejected'], true);
+						if ($blocked($hsse) || $blocked($snd)) return false;
+						if ($hsse === 'approved' && $snd === 'approved') return false;
+						return $allowed($hsse) || $allowed($snd);
 					}
-					
-					// // HSSE and S&D users can edit
-					// return $user && ($user->hasRole('HSSE') || $user->hasRole('S&D'));
+					return redirect(\App\Filament\Resources\DocumentResource::getUrl('index'));
 				}),
 				
 			//Actions\Action::make('revisi_dokumen')
@@ -87,8 +84,23 @@ class ViewDocument extends ViewRecord
 						$this->record->hsse_status === 'approved' && $this->record->snd_status === 'approved';
 				}),
 			
+			Actions\Action::make('revisi')
+				->label('Revisi')
+				->color('warning')
+				->icon('heroicon-o-arrow-path')
+				->url(fn () => DocumentResource::getUrl('edit', ['record' => $this->record->getKey()]))
+				->visible(function () {
+					$user = auth()->user();
+					if ($user->hasRole('HSSE')) {
+						return request()->boolean('review') && $this->record->hsse_status === 'pending' && (empty($this->record->id_hsse) || (int)$this->record->id_hsse === (int)$user->id);
+					} elseif ($user->hasAnyRole(['S&D','SND'])) {
+						return request()->boolean('review') && $this->record->snd_status === 'pending' && (empty($this->record->id_snd) || (int)$this->record->id_snd === (int)$user->id);
+					}
+					return false;
+				}),
+
 			Actions\Action::make('approve')
-				->label('Approved')
+				->label('Approve')
 				->color('success')
 				->icon('heroicon-o-check-circle')
 				->requiresConfirmation()
@@ -96,67 +108,62 @@ class ViewDocument extends ViewRecord
 				->modalDescription('Are you sure you want to approve this document?')
 				->action(function () {
 					$user = auth()->user();
-					
-					if ($user->hasRole('HSSE')) {
-						$this->record->update([
-							'hsse_status' => 'approved',
-							'id_hsse' => $user->id
-						]);
-					} elseif ($user->hasRole('S&D')) {
-						$this->record->update([
-							'snd_status' => 'approved',
-							'id_snd' => $user->id
-						]);
-					}
-					
+
 					\Filament\Notifications\Notification::make()
-						->title('Document approved successfully!')
+						->title('Processing approval...')
 						->success()
 						->send();
+
+					\DB::transaction(function () use ($user) {
+						if ($user->hasRole('HSSE')) {
+							if (empty($this->record->id_hsse)) {
+								$this->record->id_hsse = $user->id;
+							}
+							if ((int)$this->record->id_hsse !== (int)$user->id) {
+								\Filament\Notifications\Notification::make()
+									->title('You are not the assigned HSSE reviewer.')
+									->danger()
+									->send();
+								return;
+							}
+							$this->record->hsse_status = 'approved';
+							$this->record->id_hsse = $user->id;
+						} elseif ($user->hasAnyRole(['S&D','SND'])) {
+							if (empty($this->record->id_snd)) {
+								$this->record->id_snd = $user->id;
+							}
+							if ((int)$this->record->id_snd !== (int)$user->id) {
+								\Filament\Notifications\Notification::make()
+									->title('You are not the assigned S&D reviewer.')
+									->danger()
+									->send();
+								return;
+							}
+							$this->record->snd_status = 'approved';
+							$this->record->id_snd = $user->id;
+						}
+
+						$this->record->save();
+					});
+
+					\Filament\Notifications\Notification::make()
+						->title('Document approved!')
+						->success()
+						->send();
+
+					$this->record->refresh();
+					return redirect(\App\Filament\Resources\DocumentResource::getUrl('index'));
 				})
 				->visible(function () {
 					$user = auth()->user();
 					if ($user->hasRole('HSSE')) {
-						return $this->record->hsse_status !== 'approved';
-					} elseif ($user->hasRole('S&D')) {
-						return $this->record->snd_status !== 'approved';
+						return $this->record->hsse_status === 'pending'
+							&& (empty($this->record->id_hsse) || (int)$this->record->id_hsse === (int)$user->id);
+					} elseif ($user->hasAnyRole(['S&D','SND'])) {
+						return $this->record->snd_status === 'pending'
+							&& (empty($this->record->id_snd) || (int)$this->record->id_snd === (int)$user->id);
 					}
 					return false;
-				}),
-				
-			Actions\Action::make('revisi')
-				->label('Revisi')
-				->color('warning')
-				->icon('heroicon-o-arrow-path')
-				->requiresConfirmation()
-				->modalHeading('Revisi Document')
-				->action(function () {
-					$user = auth()->user();
-					
-					if ($user->hasRole('HSSE')) {
-						$this->record->update([
-							'hsse_status' => 'revisi',
-							'id_hsse' => $user->id
-						]);
-					} elseif ($user->hasRole('S&D')) {
-						$this->record->update([
-							'snd_status' => 'revisi',
-							'id_snd' => $user->id
-						]);
-					}
-					
-					$this->redirect(DocumentResource::getUrl('edit', ['record' => $this->record->getKey()]));
-					\Filament\Notifications\Notification::make()
-						->title('Document revised successfully!')
-						->success()
-						->send();
-				})
-				->visible(function () {
-					$bothApproved = $this->record->hsse_status === 'approved' && $this->record->snd_status === 'approved';
-					if ($bothApproved) {
-						return false;
-					}
-					return auth()->user()->hasRole('HSSE') || auth()->user()->hasRole('S&D');
 				}),
 			
 			Actions\Action::make('reject')
@@ -170,32 +177,48 @@ class ViewDocument extends ViewRecord
 					$user = auth()->user();
 					
 					if ($user->hasRole('HSSE')) {
+						if (empty($this->record->id_hsse)) {
+							$this->record->id_hsse = $user->id;
+						}
+						if ((int)$this->record->id_hsse !== (int)$user->id) {
+							\Filament\Notifications\Notification::make()
+								->title('You are not the assigned HSSE reviewer.')
+								->danger()
+								->send();
+							return;
+						}
 						$this->record->update([
 							'hsse_status' => 'rejected',
 							'id_hsse' => $user->id
 						]);
-					} elseif ($user->hasRole('S&D')) {
+					} elseif ($user->hasAnyRole(['S&D','SND'])) {
+						if (empty($this->record->id_snd)) {
+							$this->record->id_snd = $user->id;
+						}
+						if ((int)$this->record->id_snd !== (int)$user->id) {
+							\Filament\Notifications\Notification::make()
+								->title('You are not the assigned S&D reviewer.')
+								->danger()
+								->send();
+							return;
+						}
 						$this->record->update([
 							'snd_status' => 'rejected',
 							'id_snd' => $user->id
 						]);
 					}
-					
+
 					\Filament\Notifications\Notification::make()
 						->title('Document rejected!')
 						->danger()
 						->send();
 				})
 				->visible(function () {
-					$bothApproved = $this->record->hsse_status === 'approved' && $this->record->snd_status === 'approved';
-					if ($bothApproved) {
-						return false;
-					}
 					$user = auth()->user();
 					if ($user->hasRole('HSSE')) {
-						return $this->record->hsse_status !== 'rejected';
-					} elseif ($user->hasRole('S&D')) {
-						return $this->record->snd_status !== 'rejected';
+						return request()->boolean('review') && $this->record->hsse_status === 'pending' && $this->record->id_hsse == $user->id;
+					} elseif ($user->hasAnyRole(['S&D','SND'])) {
+						return request()->boolean('review') && $this->record->snd_status === 'pending' && $this->record->id_snd == $user->id;
 					}
 					return false;
 				}),
@@ -243,9 +266,6 @@ class ViewDocument extends ViewRecord
 							}),
 						TextEntry::make('tanggal_upload')
 							->label('Upload Date')
-							->dateTime(),
-						TextEntry::make('tanggal_acc')
-							->label('Approval Date')
 							->dateTime(),
 						TextEntry::make('hsse_review_started_at')
 							->label('HSSE Review Started')

@@ -71,16 +71,7 @@ class DocumentResource extends Resource
                     ->limit(60)
                     ->wrap()
                     ->toggleable()
-                    ->visible(auth()->user()->hasRole('Mitra')),
-                // Tables\Columns\TextColumn::make('status')
-                //     ->badge()
-                //     ->color(fn (string $state): string => match ($state) {
-                //         'pending' => 'gray',
-                //         'reviewing' => 'warning',
-                //         'approved' => 'success',
-                //         'rejected' => 'danger',
-                //         default => 'gray',
-                //     }),
+                    ->visible(auth()->user()->hasRole('Mitra') || auth()->user()->hasRole('Admin')),
                 Tables\Columns\TextColumn::make('hsse_status')
                     ->label('HSSE Status')
                     ->badge()
@@ -289,18 +280,45 @@ class DocumentResource extends Resource
                         if ($user->hasRole('Admin')) {
                             return false;
                         }
-                        
-                        // Mitra can edit documents ONLY when either HSSE or SND status is 'revisi'
+
+                        // Mitra can edit when:
+                        // - both statuses are pending/revisi, OR
+                        // - one status is approved and the other is pending/revisi
+                        // Not allowed when both are approved, or when any is reviewing/rejected
                         if ($user->hasRole('Mitra')) {
-                            $hasRevisiStatus = $record->hsse_status === 'revisi' || $record->snd_status === 'revisi';
-                            return $hasRevisiStatus;
+                            $hsse = $record->hsse_status;
+                            $snd = $record->snd_status;
+                            $isPendingOrRevisi = fn(string $s) => in_array($s, ['pending', 'revisi'], true);
+                            $isApproved = fn(string $s) => $s === 'approved';
+                            $isBlocked = fn(string $s) => in_array($s, ['reviewing', 'rejected'], true);
+
+                            if ($isBlocked($hsse) || $isBlocked($snd)) {
+                                return false;
+                            }
+
+                            if ($isApproved($hsse) && $isApproved($snd)) {
+                                return false;
+                            }
+
+                            return $isPendingOrRevisi($hsse) || $isPendingOrRevisi($snd);
                         }
-                        
+
                         // HSSE and S&D users cannot edit documents (they can only review)
                         return false;
                     }),
                 Tables\Actions\DeleteAction::make()
-                    ->visible(fn() => auth()->user()->hasRole('Admin')),// tombol delete hanya ditampilkan untuk admin
+                    ->visible(function (Document $record) {
+                        $user = auth()->user();
+                        // Admin can always delete (retain previous capability for admin)
+                        if ($user->hasRole('Admin')) {
+                            return true;
+                        }
+                        // Mitra can delete ONLY when both statuses are pending
+                        if ($user->hasRole('Mitra')) {
+                            return ($record->hsse_status === 'pending') && ($record->snd_status === 'pending');
+                        }
+                        return false;
+                    }),// tombol delete hanya ditampilkan sesuai kondisi
                 Tables\Actions\Action::make('Review')
                     ->label('Review')
                     ->icon('heroicon-o-pencil-square')
@@ -312,14 +330,28 @@ class DocumentResource extends Resource
                             return false;
                         }
                         
-                        // HSSE can only review if their status is pending or revisi
+                        // HSSE can only review if their status is pending AND they are the assigned reviewer (if any)
                         if ($user->hasRole('HSSE')) {
-                            return $record->hsse_status === 'pending' || $record->hsse_status === 'revisi';
+                            if ($record->hsse_status !== 'pending') {
+                                return false;
+                            }
+                            // If a previous HSSE reviewer exists, only allow that same user
+                            if (!empty($record->id_hsse)) {
+                                return (int) $record->id_hsse === (int) $user->id;
+                            }
+                            // If no previous reviewer, allow first HSSE reviewer to claim
+                            return true;
                         }
-                        
-                        // S&D can only review if their status is pending or revisi
-                        elseif ($user->hasRole('S&D')) {
-                            return $record->snd_status === 'pending' || $record->snd_status === 'revisi';
+
+                        // S&D can only review if their status is pending AND they are the assigned reviewer (if any)
+                        elseif ($user->hasAnyRole(['S&D','SND'])) {
+                            if ($record->snd_status !== 'pending') {
+                                return false;
+                            }
+                            if (!empty($record->id_snd)) {
+                                return (int) $record->id_snd === (int) $user->id;
+                            }
+                            return true;
                         }
                         
                         // Other roles cannot review
@@ -329,18 +361,35 @@ class DocumentResource extends Resource
                     ->action(function (Document $record) {
                         $user = auth()->user();
                         $updateData = [];
-                        
+
                         if ($user->hasRole('HSSE')) {
-                            $updateData['hsse_status'] = 'reviewing';
-                            $updateData['hsse_review_started_at'] = now();
-                            $updateData['id_hsse'] = $user->id;
-                        } elseif ($user->hasRole('S&D')) {
-                            $updateData['snd_status'] = 'reviewing';
-                            $updateData['snd_review_started_at'] = now();
-                            $updateData['id_snd'] = $user->id;
+                            // If there is no assigned HSSE yet, assign this user; otherwise do not change
+                            if (empty($record->id_hsse)) {
+                                $updateData['id_hsse'] = $user->id;
+                                $updateData['hsse_review_started_at'] = now();
+                            } elseif ((int) $record->id_hsse !== (int) $user->id) {
+                                abort(403, 'Dokumen ini hanya dapat direview oleh HSSE yang sebelumnya ditugaskan.');
+                            }
+                        } elseif ($user->hasAnyRole(['S&D','SND'])) {
+                            if (empty($record->id_snd)) {
+                                $updateData['id_snd'] = $user->id;
+                                $updateData['snd_review_started_at'] = now();
+                            } elseif ((int) $record->id_snd !== (int) $user->id) {
+                                abort(403, 'Dokumen ini hanya dapat direview oleh S&D yang sebelumnya ditugaskan.');
+                            }
                         }
-                        
-                        $record->update($updateData);
+
+                        if (!empty($updateData)) {
+                            $record->update($updateData);
+                        }
+                        // For HSSE, open view page in review mode; S&D unchanged behavior
+                        if ($user->hasRole('HSSE')) {
+                            $url = static::getUrl('view', ['record' => $record]);
+                            return redirect($url . '?review=1');
+                        } elseif ($user->hasAnyRole(['S&D','SND'])) {
+                            $url = static::getUrl('view', ['record' => $record]);
+                            return redirect($url . '?review=1');
+                        }
                         return redirect(static::getUrl('view',['record'=>$record])); // masuk kedalam halaman view dokumen
                     })
                 ])

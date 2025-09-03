@@ -11,22 +11,27 @@ Route::get('/', function () {
     return view('welcome');
 });
 
+Route::get('/livewire/update', function () {
+    // Redirect to admin panel if accessed via GET
+    return redirect('/admin');
+});
+
 Route::get('/pdf/viewer/{file}', function ($file) {
     // Decode filename
     $filename = urldecode($file);
-    
+
     // Cari file di storage public
     $path = storage_path('app/public/' . $filename);
-    
+
     // Jika file tidak ditemukan, coba dengan basename
     if (!file_exists($path)) {
         $path = storage_path('app/public/' . basename($filename));
     }
-    
+
     if (!file_exists($path)) {
         abort(404, 'File not found');
     }
-    
+
     // Return file dengan headers yang benar
     return response()->file($path, [
         'Content-Type' => 'application/pdf',

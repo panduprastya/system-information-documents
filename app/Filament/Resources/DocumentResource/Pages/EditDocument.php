@@ -34,9 +34,19 @@ class EditDocument extends EditRecord
             abort(403, 'Anda tidak dapat mengedit dokumen yang bukan milik Anda.');
         }
         
-        // Jika user adalah Mitra, pastikan dokumen memerlukan revisi
-        if ($user && $user->hasRole('Mitra') && !$record->needsRevision()) {
-            abort(403, 'Dokumen ini tidak memerlukan revisi. Anda hanya dapat mengedit dokumen dengan status revisi.');
+        // Jika user adalah Mitra, izinkan edit jika:
+        // - Kedua status pending/revisi, atau
+        // - Salah satu approved dan yang lain pending/revisi
+        // Tidak diizinkan jika kedua approved atau salah satu reviewing/rejected
+        if ($user && $user->hasRole('Mitra')) {
+            $hsse = $record->hsse_status;
+            $snd = $record->snd_status;
+            $isPendingOrRevisi = in_array($hsse, ['pending', 'revisi'], true) || in_array($snd, ['pending', 'revisi'], true);
+            $anyBlocked = in_array($hsse, ['reviewing', 'rejected'], true) || in_array($snd, ['reviewing', 'rejected'], true);
+            $bothApproved = ($hsse === 'approved') && ($snd === 'approved');
+            if (!$isPendingOrRevisi || $anyBlocked || $bothApproved) {
+                abort(403, 'Dokumen ini tidak dapat diedit. Mitra dapat mengedit jika ada status pending/revisi dan tidak ada status reviewing/rejected, serta tidak keduanya approved.');
+            }
         }
         
         return $record;
@@ -74,13 +84,17 @@ class EditDocument extends EditRecord
                             ->schema([
                                 TextInput::make('judul_dokumen')
                                     ->required()
-                                    ->maxLength(255),
+                                    ->maxLength(255)
+                                    ->disabled(fn() => auth()->user()->hasRole('HSSE') || auth()->user()->hasRole('S&D'))
+                                    ->dehydrated(fn() => !(auth()->user()->hasRole('HSSE') || auth()->user()->hasRole('S&D'))),
                                 FileUpload::make('file')
                                     ->label('PDF File')
                                     ->acceptedFileTypes(['application/pdf'])
                                     ->required()
                                     ->maxSize(10240)
-                                    ->helperText('Upload a PDF file (max 10MB)'),
+                                    ->helperText('Upload a PDF file (max 10MB)')
+                                    ->disabled(fn() => auth()->user()->hasRole('HSSE') || auth()->user()->hasRole('S&D'))
+                                    ->dehydrated(fn() => !(auth()->user()->hasRole('HSSE') || auth()->user()->hasRole('S&D'))),
                                 Textarea::make('keterangan')
                                     ->label('Keterangan Dokumen')
                                     ->placeholder('Masukkan keterangan tambahan untuk dokumen ini...')
@@ -307,10 +321,8 @@ class EditDocument extends EditRecord
                 $statusChanged = true;
             }
             
-            // Reset reviewer jika status berubah
+            // Reset review timestamps jika status berubah (tetap pertahankan id_hsse dan id_snd)
             if ($statusChanged) {
-                $record->id_hsse = null;
-                $record->id_snd = null;
                 $record->hsse_review_started_at = null;
                 $record->snd_review_started_at = null;
             }
