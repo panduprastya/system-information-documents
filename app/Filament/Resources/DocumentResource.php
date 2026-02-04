@@ -27,14 +27,19 @@ class DocumentResource extends Resource
     {
         $user = auth()->user();
         $isMitra = $user && $user->hasRole('Mitra');
-        
+
         return $form
             ->schema([
                 Forms\Components\TextInput::make('judul_dokumen')
                     ->required()
-                    ->maxLength(255),
+                    ->maxLength(255)
+                    ->columnSpanFull(),
                 FileUpload::make('file')
-                    ->required(),
+                    ->required()
+                    ->acceptedFileTypes(['application/pdf'])
+                    ->maxSize(10240) // Maksimal 10 MB (dalam kilobytes)
+                    ->helperText('Format file harus PDF. Ukuran file maksimal 10 MB')
+                    ->columnSpanFull(),
                 Forms\Components\Textarea::make('keterangan')
                     ->label('Keterangan Dokumen')
                     ->placeholder('Masukkan keterangan tambahan untuk dokumen ini...')
@@ -50,7 +55,8 @@ class DocumentResource extends Resource
                     ->preload()
                     ->visible(!$isMitra)
                     ->required(!$isMitra)
-                    ->disabled($isMitra), // Disable field untuk Mitra
+                    ->disabled($isMitra) // Disable field untuk Mitra
+                    ->columnSpanFull(),
             ]);
     }
 
@@ -64,18 +70,18 @@ class DocumentResource extends Resource
                     ->label('Nama Mitra')
                     ->searchable()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('file')
-                    ->searchable(),
+                // Tables\Columns\TextColumn::make('file')
+                //     ->searchable(),
                 Tables\Columns\TextColumn::make('keterangan')
                     ->label('Keterangan Dokumen')
                     ->limit(60)
                     ->wrap()
                     ->toggleable()
-                    ->visible(auth()->user()->hasRole('Mitra') || auth()->user()->hasRole('Admin')),
+                    ->visible(auth()->user()->hasRole('Mitra') || auth()->user()->hasRole('Admin') || auth()->user()->hasRole('HSSE') || auth()->user()->hasRole('S&D')),
                 Tables\Columns\TextColumn::make('hsse_status')
                     ->label('HSSE Status')
                     ->badge()
-                    ->color(fn (string $state): string => match ($state) {
+                    ->color(fn(string $state): string => match ($state) {
                         'pending' => 'gray',
                         'reviewing' => 'warning',
                         'approved' => 'success',
@@ -83,7 +89,7 @@ class DocumentResource extends Resource
                         'revisi' => 'info',
                         default => 'gray',
                     })
-                    ->icon(fn (string $state): string => match ($state) {
+                    ->icon(fn(string $state): string => match ($state) {
                         'pending' => 'heroicon-o-clock',
                         'reviewing' => 'heroicon-o-eye',
                         'approved' => 'heroicon-o-check-circle',
@@ -94,7 +100,7 @@ class DocumentResource extends Resource
                 Tables\Columns\TextColumn::make('snd_status')
                     ->label('S&D Status')
                     ->badge()
-                    ->color(fn (string $state): string => match ($state) {
+                    ->color(fn(string $state): string => match ($state) {
                         'pending' => 'gray',
                         'review' => 'warning',
                         'approved' => 'success',
@@ -102,7 +108,7 @@ class DocumentResource extends Resource
                         'revisi' => 'info',
                         default => 'gray',
                     })
-                    ->icon(fn (string $state): string => match ($state) {
+                    ->icon(fn(string $state): string => match ($state) {
                         'pending' => 'heroicon-o-clock',
                         'review' => 'heroicon-o-eye',
                         'approved' => 'heroicon-o-check-circle',
@@ -120,84 +126,84 @@ class DocumentResource extends Resource
                     ->label('Nama HSSE')
                     ->searchable()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('hsseComments')
-                    ->label('HSSE Comments')
-                    ->formatStateUsing(function ($state, $record) {
-                        $comments = $record->hsseComments()->with('user')->get();
-                        if ($comments->isEmpty()) {
-                            return 'No comments';
-                        }
-                        
-                        $latestComment = $comments->first();
-                        $count = $comments->count();
-                        
-                        $text = $latestComment->komentar ?? '';
-                        if (strlen($text) > 50) {
-                            $text = substr($text, 0, 50) . '...';
-                        }
-                        
-                        return $count > 1 
-                            ? $text . " ({$count} comments)" 
-                            : $text;
-                    })
-                    ->tooltip(function ($record) {
-                        $comments = $record->hsseComments()->with('user')->get();
-                        if ($comments->isEmpty()) {
-                            return 'No comments';
-                        }
-                        
-                        return $comments->map(function ($comment) {
-                            $userName = $comment->user ? $comment->user->name : 'Unknown';
-                            return $userName . ': ' . $comment->komentar;
-                        })->implode("\n");
-                    })
-                    ->searchable(query: function (Builder $query, string $search): Builder {
-                        return $query->whereHas('hsseComments', function ($query) use ($search) {
-                            $query->where('komentar', 'like', "%{$search}%");
-                        });
-                    })
-                    ->sortable(),
+                // Tables\Columns\TextColumn::make('hsseComments')
+                //     ->label('HSSE Comments')
+                //     ->formatStateUsing(function ($state, $record) {
+                //         $comments = $record->hsseComments()->with('user')->get();
+                //         if ($comments->isEmpty()) {
+                //             return 'No comments';
+                //         }
+
+                //         $latestComment = $comments->first();
+                //         $count = $comments->count();
+
+                //         $text = $latestComment->komentar ?? '';
+                //         if (strlen($text) > 50) {
+                //             $text = substr($text, 0, 50) . '...';
+                //         }
+
+                //         return $count > 1
+                //             ? $text . " ({$count} comments)"
+                //             : $text;
+                //     })
+                //     ->tooltip(function ($record) {
+                //         $comments = $record->hsseComments()->with('user')->get();
+                //         if ($comments->isEmpty()) {
+                //             return 'No comments';
+                //         }
+
+                //         return $comments->map(function ($comment) {
+                //             $userName = $comment->user ? $comment->user->name : 'Unknown';
+                //             return $userName . ': ' . $comment->komentar;
+                //         })->implode("\n");
+                //     })
+                //     ->searchable(query: function (Builder $query, string $search): Builder {
+                //         return $query->whereHas('hsseComments', function ($query) use ($search) {
+                //             $query->where('komentar', 'like', "%{$search}%");
+                //         });
+                //     })
+                //     ->sortable(),
                 Tables\Columns\TextColumn::make('snd.name')
                     ->label('Nama S&D')
                     ->searchable()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('sndComments')
-                    ->label('S&D Comments')
-                    ->formatStateUsing(function ($state, $record) {
-                        $comments = $record->sndComments()->with('user')->get();
-                        if ($comments->isEmpty()) {
-                            return 'No comments';
-                        }
-                        
-                        $latestComment = $comments->first();
-                        $count = $comments->count();
-                        
-                        $text = $latestComment->komentar ?? '';
-                        if (strlen($text) > 50) {
-                            $text = substr($text, 0, 50) . '...';
-                        }
-                        
-                        return $count > 1 
-                            ? $text . " ({$count} comments)" 
-                            : $text;
-                    })
-                    ->tooltip(function ($record) {
-                        $comments = $record->sndComments()->with('user')->get();
-                        if ($comments->isEmpty()) {
-                            return 'No comments';
-                        }
-                        
-                        return $comments->map(function ($comment) {
-                            $userName = $comment->user ? $comment->user->name : 'Unknown';
-                            return $userName . ': ' . $comment->komentar;
-                        })->implode("\n");
-                    })
-                    ->searchable(query: function (Builder $query, string $search): Builder {
-                        return $query->whereHas('sndComments', function ($query) use ($search) {
-                            $query->where('komentar', 'like', "%{$search}%");
-                        });
-                    })
-                    ->sortable(),
+                // Tables\Columns\TextColumn::make('sndComments')
+                //     ->label('S&D Comments')
+                //     ->formatStateUsing(function ($state, $record) {
+                //         $comments = $record->sndComments()->with('user')->get();
+                //         if ($comments->isEmpty()) {
+                //             return 'No comments';
+                //         }
+
+                //         $latestComment = $comments->first();
+                //         $count = $comments->count();
+
+                //         $text = $latestComment->komentar ?? '';
+                //         if (strlen($text) > 50) {
+                //             $text = substr($text, 0, 50) . '...';
+                //         }
+
+                //         return $count > 1
+                //             ? $text . " ({$count} comments)"
+                //             : $text;
+                //     })
+                //     ->tooltip(function ($record) {
+                //         $comments = $record->sndComments()->with('user')->get();
+                //         if ($comments->isEmpty()) {
+                //             return 'No comments';
+                //         }
+
+                //         return $comments->map(function ($comment) {
+                //             $userName = $comment->user ? $comment->user->name : 'Unknown';
+                //             return $userName . ': ' . $comment->komentar;
+                //         })->implode("\n");
+                //     })
+                //     ->searchable(query: function (Builder $query, string $search): Builder {
+                //         return $query->whereHas('sndComments', function ($query) use ($search) {
+                //             $query->where('komentar', 'like', "%{$search}%");
+                //         });
+                //     })
+                //     ->sortable(),
                 Tables\Columns\TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -237,45 +243,45 @@ class DocumentResource extends Resource
                 Tables\Actions\Action::make('download')
                     ->label('Download')
                     ->icon('heroicon-o-arrow-down-tray')
-                    ->url(fn (Document $record) => route('documents.download', ['document' => $record->getKey()]))
+                    ->url(fn(Document $record) => route('documents.download', ['document' => $record->getKey()]))
                     ->openUrlInNewTab()
                     ->visible(function (Document $record) {
                         $user = auth()->user();
                         return $user && $user->hasRole('Mitra') &&
                             $record->hsse_status === 'approved' && $record->snd_status === 'approved';
                     }),
-                    
-                Tables\Actions\Action::make('revision_info')
-                    ->label('Info Revisi')
-                    ->icon('heroicon-o-information-circle')
-                    ->color('warning')
-                    ->visible(function (Document $record) {
-                        $user = auth()->user();
-                        return $user && $user->hasRole('Mitra') && $record->needsRevision();
-                    })
-                    ->action(function (Document $record) {
-                        $reasons = $record->getRevisionReasons();
-                        $message = "Dokumen ini memerlukan revisi:\n\n";
-                        
-                        foreach ($reasons as $reason) {
-                            $message .= "{$reason['type']} Review:\n";
-                            $message .= "Alasan: {$reason['comment']}\n";
-                            $message .= "Reviewer: {$reason['reviewer']}\n";
-                            $message .= "Tanggal: {$reason['date']->format('d/m/Y H:i')}\n\n";
-                        }
-                        
-                        $message .= "Silakan edit dokumen untuk melakukan revisi sesuai feedback di atas.";
-                        
-                        Notification::make()
-                            ->title('Informasi Revisi')
-                            ->body($message)
-                            ->persistent()
-                            ->send();
-                    }),
+
+                // Tables\Actions\Action::make('revision_info')
+                //     ->label('Info Revisi')
+                //     ->icon('heroicon-o-information-circle')
+                //     ->color('warning')
+                //     ->visible(function (Document $record) {
+                //         $user = auth()->user();
+                //         return $user && $user->hasRole('Mitra') && $record->needsRevision();
+                //     })
+                //     ->action(function (Document $record) {
+                //         $reasons = $record->getRevisionReasons();
+                //         $message = "Dokumen ini memerlukan revisi:\n\n";
+
+                //         foreach ($reasons as $reason) {
+                //             $message .= "{$reason['type']} Review:\n";
+                //             $message .= "Alasan: {$reason['comment']}\n";
+                //             $message .= "Reviewer: {$reason['reviewer']}\n";
+                //             $message .= "Tanggal: {$reason['date']->format('d/m/Y H:i')}\n\n";
+                //         }
+
+                //         $message .= "Silakan edit dokumen untuk melakukan revisi sesuai feedback di atas.";
+
+                //         Notification::make()
+                //             ->title('Informasi Revisi')
+                //             ->body($message)
+                //             ->persistent()
+                //             ->send();
+                //     }),
                 Tables\Actions\EditAction::make()
                     ->visible(function (Document $record) {
                         $user = auth()->user();
-                        
+
                         // Admin cannot edit documents
                         if ($user->hasRole('Admin')) {
                             return false;
@@ -309,7 +315,7 @@ class DocumentResource extends Resource
                 Tables\Actions\DeleteAction::make()
                     ->visible(function (Document $record) {
                         $user = auth()->user();
-                        // Admin can always delete (retain previous capability for admin)
+                        // Admin can always delete
                         if ($user->hasRole('Admin')) {
                             return true;
                         }
@@ -318,21 +324,32 @@ class DocumentResource extends Resource
                             return ($record->hsse_status === 'pending') && ($record->snd_status === 'pending');
                         }
                         return false;
-                    }),// tombol delete hanya ditampilkan sesuai kondisi
+                    })
+                    ->action(function (Document $record) {
+                        if ($record->file) {
+                            \Illuminate\Support\Facades\Storage::disk('public')->delete($record->file);
+                        }
+                        $record->forceDelete();
+
+                        Notification::make()
+                            ->title('Deleted successfully')
+                            ->success()
+                            ->send();
+                    }),
                 Tables\Actions\Action::make('Review')
                     ->label('Review')
                     ->icon('heroicon-o-pencil-square')
                     ->visible(function (Document $record) {
                         $user = auth()->user();
-                        
+
                         // Don't show review button if both statuses are approved
                         if ($record->hsse_status === 'approved' && $record->snd_status === 'approved') {
                             return false;
                         }
-                        
-                        // HSSE can only review if their status is pending AND they are the assigned reviewer (if any)
+
+                        // HSSE can only review if their status is pending or reviewing AND they are the assigned reviewer (if any)
                         if ($user->hasRole('HSSE')) {
-                            if ($record->hsse_status !== 'pending') {
+                            if (!in_array($record->hsse_status, ['pending', 'reviewing'])) {
                                 return false;
                             }
                             // If a previous HSSE reviewer exists, only allow that same user
@@ -343,9 +360,9 @@ class DocumentResource extends Resource
                             return true;
                         }
 
-                        // S&D can only review if their status is pending AND they are the assigned reviewer (if any)
-                        elseif ($user->hasAnyRole(['S&D','SND'])) {
-                            if ($record->snd_status !== 'pending') {
+                        // S&D can only review if their status is pending or reviewing AND they are the assigned reviewer (if any)
+                        elseif ($user->hasAnyRole(['S&D', 'SND'])) {
+                            if (!in_array($record->snd_status, ['pending', 'reviewing'])) {
                                 return false;
                             }
                             if (!empty($record->id_snd)) {
@@ -353,7 +370,7 @@ class DocumentResource extends Resource
                             }
                             return true;
                         }
-                        
+
                         // Other roles cannot review
                         return false;
                     })
@@ -367,41 +384,75 @@ class DocumentResource extends Resource
                             if (empty($record->id_hsse)) {
                                 $updateData['id_hsse'] = $user->id;
                                 $updateData['hsse_review_started_at'] = now();
+                                $updateData['hsse_status'] = 'reviewing'; // Ubah status menjadi reviewing
                             } elseif ((int) $record->id_hsse !== (int) $user->id) {
-                                abort(403, 'Dokumen ini hanya dapat direview oleh HSSE yang sebelumnya ditugaskan.');
+                                Notification::make()
+                                    ->title('Akses Ditolak')
+                                    ->body('Dokumen ini hanya dapat direview oleh HSSE yang sebelumnya ditugaskan.')
+                                    ->danger()
+                                    ->send();
+                                return;
+                            } else {
+                                // Jika sudah assigned, tetap update status menjadi reviewing
+                                $updateData['hsse_status'] = 'reviewing';
                             }
-                        } elseif ($user->hasAnyRole(['S&D','SND'])) {
+                        } elseif ($user->hasAnyRole(['S&D', 'SND'])) {
                             if (empty($record->id_snd)) {
                                 $updateData['id_snd'] = $user->id;
                                 $updateData['snd_review_started_at'] = now();
+                                $updateData['snd_status'] = 'reviewing'; // Ubah status menjadi reviewing
                             } elseif ((int) $record->id_snd !== (int) $user->id) {
-                                abort(403, 'Dokumen ini hanya dapat direview oleh S&D yang sebelumnya ditugaskan.');
+                                Notification::make()
+                                    ->title('Akses Ditolak')
+                                    ->body('Dokumen ini hanya dapat direview oleh S&D yang sebelumnya ditugaskan.')
+                                    ->danger()
+                                    ->send();
+                                return;
+                            } else {
+                                // Jika sudah assigned, tetap update status menjadi reviewing
+                                $updateData['snd_status'] = 'reviewing';
                             }
                         }
 
                         if (!empty($updateData)) {
                             $record->update($updateData);
+
+                            Notification::make()
+                                ->title('Review Dimulai')
+                                ->success()
+                                ->send();
                         }
-                        // For HSSE, open view page in review mode; S&D unchanged behavior
-                        if ($user->hasRole('HSSE')) {
-                            $url = static::getUrl('view', ['record' => $record]);
-                            return redirect($url . '?review=1');
-                        } elseif ($user->hasAnyRole(['S&D','SND'])) {
-                            $url = static::getUrl('view', ['record' => $record]);
-                            return redirect($url . '?review=1');
+
+                        // For HSSE and S&D, open view page in review mode
+                        $url = static::getUrl('view', ['record' => $record]);
+
+                        if ($user->hasRole('HSSE') || $user->hasAnyRole(['S&D', 'SND'])) {
+                            return redirect()->to($url . '?review=1');
                         }
-                        return redirect(static::getUrl('view',['record'=>$record])); // masuk kedalam halaman view dokumen
+
+                        return redirect()->to($url);
                     })
-                ])
+            ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
-                    Tables\Actions\ForceDeleteBulkAction::make(),
-                    Tables\Actions\RestoreBulkAction::make(),
+                    Tables\Actions\DeleteBulkAction::make()
+                        ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
+                            $records->each(function ($record) {
+                                if ($record->file) {
+                                    \Illuminate\Support\Facades\Storage::disk('public')->delete($record->file);
+                                }
+                                $record->forceDelete();
+                            });
+
+                            Notification::make()
+                                ->title('Deleted successfully')
+                                ->success()
+                                ->send();
+                        }),
                 ])
-                ->visible(fn() => auth()->user()->hasRole('Admin')), //supaya bulk action dapat diakses oleh admin saja
+                    ->visible(fn() => auth()->user()->hasRole('Admin')), //supaya bulk action deletes dapat diakses oleh admin saja
             ]);
-        }
+    }
 
     public static function getRelations(): array
     {
@@ -426,15 +477,15 @@ class DocumentResource extends Resource
             ->withoutGlobalScopes([
                 SoftDeletingScope::class,
             ])
-            ->with(['mitra', 'hsseComments.user','sndComments.user']);
-        
+            ->with(['mitra', 'hsse', 'snd']);
+
         $user = auth()->user();
-        
+
         // Jika user adalah Mitra, hanya tampilkan dokumen yang mereka buat
         if ($user && $user->hasRole('Mitra')) {
             $query->where('id_mitra', $user->id);
         }
-        
+
         return $query;
     }
 }

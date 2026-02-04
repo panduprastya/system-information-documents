@@ -4,7 +4,7 @@ namespace App\Filament\Resources\DocumentResource\Pages;
 use Filament\Actions;
 use Filament\Forms\Form;
 use App\Models\HsseComment;
-use App\Models\sndComment;
+use App\Models\SndComment;
 use App\Models\document;
 use Filament\Forms\Components\Grid;
 use Filament\Forms\Components\Section;
@@ -27,13 +27,17 @@ class EditDocument extends EditRecord
     protected function resolveRecord($key): \Illuminate\Database\Eloquent\Model
     {
         $record = parent::resolveRecord($key);
+
+        // Eager load relationships to prevent N+1 queries
+        $record->load(['mitra', 'hsse', 'snd', 'hsseComments.user', 'sndComments.user']);
+
         $user = auth()->user();
-        
+
         // Jika user adalah Mitra, pastikan mereka hanya dapat mengedit dokumen mereka sendiri
         if ($user && $user->hasRole('Mitra') && $record->id_mitra !== $user->id) {
             abort(403, 'Anda tidak dapat mengedit dokumen yang bukan milik Anda.');
         }
-        
+
         // Jika user adalah Mitra, izinkan edit jika:
         // - Kedua status pending/revisi, atau
         // - Salah satu approved dan yang lain pending/revisi
@@ -48,19 +52,19 @@ class EditDocument extends EditRecord
                 abort(403, 'Dokumen ini tidak dapat diedit. Mitra dapat mengedit jika ada status pending/revisi dan tidak ada status reviewing/rejected, serta tidak keduanya approved.');
             }
         }
-        
+
         return $record;
     }
 
     protected function mutateFormDataBeforeSave(array $data): array
     {
         $user = auth()->user();
-        
+
         // Jika user adalah Mitra, pastikan id_mitra tidak berubah
         if ($user && $user->hasRole('Mitra')) {
             $data['id_mitra'] = $user->id;
         }
-        
+
         return $data;
     }
 
@@ -72,6 +76,12 @@ class EditDocument extends EditRecord
             Actions\ForceDeleteAction::make(),
             Actions\RestoreAction::make(),
         ];
+    }
+
+    protected function getRedirectUrl(): string
+    {
+        // Redirect ke halaman list dokumen setelah save changes
+        return $this->getResource()::getUrl('index');
     }
 
     public function form(Form $form): Form
@@ -104,81 +114,82 @@ class EditDocument extends EditRecord
                                     ->visible(auth()->user()->hasRole('Mitra')),
                             ])
                             ->columnSpan(['lg' => 2]),
-                            
+
                         Section::make('Revision Information')
                             ->schema([
                                 Placeholder::make('document_status')
                                     ->label('Status Dokumen')
                                     ->content(function ($record) {
-                                        if (!$record) return 'Status tidak tersedia';
-                                        
+                                        if (!$record)
+                                            return 'Status tidak tersedia';
+
                                         $html = '<div class="grid grid-cols-2 gap-4">';
-                                        
+
                                         // HSSE Status
-                                        $hsseColor = match($record->hsse_status) {
+                                        $hsseColor = match ($record->hsse_status) {
                                             'approved' => 'bg-green-100 text-green-800 border-green-200',
                                             'rejected' => 'bg-red-100 text-red-800 border-red-200',
                                             'revisi' => 'bg-yellow-100 text-yellow-800 border-yellow-200',
                                             'reviewing' => 'bg-blue-100 text-blue-800 border-blue-200',
                                             default => 'bg-gray-100 text-gray-800 border-gray-200'
                                         };
-                                        
+
                                         $html .= '<div class="p-3 border rounded-lg ' . $hsseColor . '">';
                                         $html .= '<div class="font-semibold">HSSE Status</div>';
                                         $html .= '<div class="text-sm">' . ucfirst($record->hsse_status ?? 'pending') . '</div>';
                                         $html .= '</div>';
-                                        
+
                                         // SND Status
-                                        $sndColor = match($record->snd_status) {
+                                        $sndColor = match ($record->snd_status) {
                                             'approved' => 'bg-green-100 text-green-800 border-green-200',
                                             'rejected' => 'bg-red-100 text-red-800 border-red-200',
                                             'revisi' => 'bg-yellow-100 text-yellow-800 border-yellow-200',
                                             'reviewing' => 'bg-blue-100 text-blue-800 border-blue-200',
                                             default => 'bg-gray-100 text-gray-800 border-gray-200'
                                         };
-                                        
+
                                         $html .= '<div class="p-3 border rounded-lg ' . $sndColor . '">';
                                         $html .= '<div class="font-semibold">S&D Status</div>';
                                         $html .= '<div class="text-sm">' . ucfirst($record->snd_status ?? 'pending') . '</div>';
                                         $html .= '</div>';
-                                        
+
                                         $html .= '</div>';
-                                        
+
                                         return new \Illuminate\Support\HtmlString($html);
                                     })
                                     ->columnSpanFull()
                                     ->visible(auth()->user()->hasRole('Mitra')),
-                                    
-                                Placeholder::make('revision_info')
-                                    ->label('Alasan Revisi')
-                                    ->content(function ($record) {
-                                        if (!$record || !$record->needsRevision()) {
-                                            return 'Dokumen ini tidak memerlukan revisi.';
-                                        }
-                                        
-                                        $reasons = $record->getRevisionReasons();
-                                        if (empty($reasons)) {
-                                            return 'Tidak ada alasan revisi yang tersedia.';
-                                        }
-                                        
-                                        $html = '<div class="space-y-2">';
-                                        foreach ($reasons as $reason) {
-                                            $html .= '<div class="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">';
-                                            $html .= '<div class="font-semibold text-yellow-800">' . $reason['type'] . ' Review</div>';
-                                            $html .= '<div class="text-sm text-yellow-700 mt-1">' . nl2br(e($reason['comment'])) . '</div>';
-                                            $html .= '<div class="text-xs text-yellow-600 mt-2">Reviewer: ' . e($reason['reviewer']) . ' | ' . $reason['date']->format('d/m/Y H:i') . '</div>';
-                                            $html .= '</div>';
-                                        }
-                                        $html .= '</div>';
-                                        
-                                        return new \Illuminate\Support\HtmlString($html);
-                                    })
-                                    ->columnSpanFull()
-                                    ->visible(auth()->user()->hasRole('Mitra')),
+
+                                // Placeholder::make('revision_info')
+                                //     ->label('Alasan Revisi')
+                                //     ->content(function ($record) {
+                                //         if (!$record || !$record->needsRevision()) {
+                                //             return 'Dokumen ini tidak memerlukan revisi.';
+                                //         }
+
+                                //         $reasons = $record->getRevisionReasons();
+                                //         if (empty($reasons)) {
+                                //             return 'Tidak ada alasan revisi yang tersedia.';
+                                //         }
+
+                                //         $html = '<div class="space-y-2">';
+                                //         foreach ($reasons as $reason) {
+                                //             $html .= '<div class="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">';
+                                //             $html .= '<div class="font-semibold text-yellow-800">' . $reason['type'] . ' Review</div>';
+                                //             $html .= '<div class="text-sm text-yellow-700 mt-1">' . nl2br(e($reason['comment'])) . '</div>';
+                                //             $html .= '<div class="text-xs text-yellow-600 mt-2">Reviewer: ' . e($reason['reviewer']) . ' | ' . $reason['date']->format('d/m/Y H:i') . '</div>';
+                                //             $html .= '</div>';
+                                //         }
+                                //         $html .= '</div>';
+
+                                //         return new \Illuminate\Support\HtmlString($html);
+                                //     })
+                                //     ->columnSpanFull()
+                                //     ->visible(auth()->user()->hasRole('Mitra')),
                             ])
                             ->columnSpan(['lg' => 2])
                             ->visible(auth()->user()->hasRole('Mitra')),
-                            
+
                         Section::make('PDF Preview')
                             ->schema([
                                 Placeholder::make('pdf_preview')
@@ -202,43 +213,29 @@ class EditDocument extends EditRecord
                                     ->rows(4)
                                     ->maxLength(2000)
                                     ->columnSpanFull()
-                                   ->visible(auth()->user()->hasRole('HSSE')),
+                                    ->visible(auth()->user()->hasRole('HSSE')),
 
                                 Repeater::make('existing_hsse_comments')
                                     ->label('Previous HSSE Comments')
                                     ->relationship('hsseComments')
-                                    ->mutateRelationshipDataBeforeSaveUsing(function (array $data): array {
-                                        // Remove 'user' field from data before saving
-                                        if (isset($data['user'])) {
-                                            unset($data['user']);
-                                        }
-                                        return $data;
-                                    })
                                     ->schema([
                                         Textarea::make('komentar')
                                             ->label('Comment')
                                             ->rows(3)
                                             ->disabled()
                                             ->columnSpanFull(),
-                                        TextInput::make('user.name')
+                                        Placeholder::make('reviewer_name')
                                             ->label('Commented By')
-                                            ->disabled()
-                                            ->dehydrated(false)
-                                            ->afterStateHydrated(function ($component, $state) {
-                                                // Prevent trying to save this relationship field
-                                                $component->state(null);
-                                            }),
-                                        DateTimePicker::make('created_at')
+                                            ->content(fn($record) => $record->user->name ?? 'Unknown User'),
+                                        Placeholder::make('commented_at')
                                             ->label('Commented At')
-                                            ->disabled()
-                                            ->displayFormat('d/m/Y H:i')
-                                            ->dehydrated(false),
+                                            ->content(fn($record) => $record->created_at?->format('d/m/Y H:i') ?? '-'),
                                     ])
                                     ->addable(false)
                                     ->deletable(false)
                                     ->reorderable(false)
-                                    ->columnSpanFull()
-                                    ->visible(fn ($record) => $record && $record->hsseComments()->count() > 0),
+                                    ->dehydrated(false)
+                                    ->columnSpanFull(),
                             ])
                             ->columnSpan(['lg' => 2]),
 
@@ -255,38 +252,24 @@ class EditDocument extends EditRecord
                                 Repeater::make('existing_snd_comments')
                                     ->label('Previous S&D Comments')
                                     ->relationship('sndComments')
-                                    ->mutateRelationshipDataBeforeSaveUsing(function (array $data): array {
-                                        // Remove 'user' field from data before saving
-                                        if (isset($data['user'])) {
-                                            unset($data['user']);
-                                        }
-                                        return $data;
-                                    })
                                     ->schema([
                                         Textarea::make('komentar')
                                             ->label('Comment')
                                             ->rows(3)
                                             ->disabled()
                                             ->columnSpanFull(),
-                                        TextInput::make('user.name')
+                                        Placeholder::make('reviewer_name')
                                             ->label('Commented By')
-                                            ->disabled()
-                                            ->dehydrated(false)
-                                            ->afterStateHydrated(function ($component, $state) {
-                                                // Prevent trying to save this relationship field
-                                                $component->state(null);
-                                            }),
-                                        DateTimePicker::make('created_at')
+                                            ->content(fn($record) => $record->user->name ?? 'Unknown User'),
+                                        Placeholder::make('commented_at')
                                             ->label('Commented At')
-                                            ->disabled()
-                                            ->displayFormat('d/m/Y H:i')
-                                            ->dehydrated(false),
+                                            ->content(fn($record) => $record->created_at?->format('d/m/Y H:i') ?? '-'),
                                     ])
                                     ->addable(false)
                                     ->deletable(false)
                                     ->reorderable(false)
-                                    ->columnSpanFull()
-                                    ->visible(fn ($record) => $record && $record->sndComments()->count() > 0),
+                                    ->dehydrated(false)
+                                    ->columnSpanFull(),
                             ])
                             ->columnSpan(['lg' => 2]),
                     ]),
@@ -303,32 +286,32 @@ class EditDocument extends EditRecord
 
         // Update the document first
         $record = parent::handleRecordUpdate($record, $data);
-        
+
         // Jika user adalah Mitra, ubah status HSSE dan S&D menjadi pending
         $currentUser = Auth::user();
         if ($currentUser->hasRole('Mitra')) {
             $statusChanged = false;
-            
+
             // Ubah status HSSE menjadi pending jika saat ini adalah 'revisi'
             if ($record->hsse_status === 'revisi') {
                 $record->hsse_status = 'pending';
                 $statusChanged = true;
             }
-            
+
             // Ubah status SND menjadi pending jika saat ini adalah 'revisi'
             if ($record->snd_status === 'revisi') {
                 $record->snd_status = 'pending';
                 $statusChanged = true;
             }
-            
+
             // Reset review timestamps jika status berubah (tetap pertahankan id_hsse dan id_snd)
             if ($statusChanged) {
                 $record->hsse_review_started_at = null;
                 $record->snd_review_started_at = null;
             }
-            
+
             $record->save();
-            
+
             if ($statusChanged) {
                 Notification::make()
                     ->success()
@@ -354,13 +337,13 @@ class EditDocument extends EditRecord
                 'user_id' => $currentUserId,
                 'komentar' => $newHsseComment,
             ]);
-            
+
             // Update HSSE status to revisi and set HSSE user when comment is saved
             $record->update([
                 'hsse_status' => 'revisi',
                 'id_hsse' => $currentUserId
             ]);
-            
+
             // Tampilkan notifikasi atau pesan bahwa HSSE telah memberikan revisi
             Notification::make()
                 ->success()
@@ -376,13 +359,13 @@ class EditDocument extends EditRecord
                 'user_id' => $currentUserId,
                 'komentar' => $newSndComment,
             ]);
-            
+
             // Update S&D status to revisi and set S&D user when comment is saved
             $record->update([
                 'snd_status' => 'revisi',
                 'id_snd' => $currentUserId
             ]);
-            
+
             // Tampilkan notifikasi atau pesan bahwa S&D telah memberikan revisi
             Notification::make()
                 ->success()

@@ -4,8 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration
-{
+return new class extends Migration {
     /**
      * Run the migrations.
      */
@@ -13,22 +12,38 @@ return new class extends Migration
     {
         // Fix the komentars table foreign key first
         Schema::table('komentars', function (Blueprint $table) {
-            $table->dropForeign(['dokumen_id']);
-            $table->renameColumn('dokumen_id', 'document_id');
-            $table->foreign('document_id')->references('id')->on('documents')->onDelete('cascade');
-            
+            if (Schema::hasColumn('komentars', 'dokumen_id')) {
+                // $table->dropForeign(['dokumen_id']); // SQLite might issue with this if not named specifically
+                $table->renameColumn('dokumen_id', 'document_id');
+                $table->foreign('document_id')->references('id')->on('documents')->onDelete('cascade');
+            }
+
             // Add new columns for review tracking
-            $table->enum('reviewer_type', ['hsse', 'snd'])->nullable()->after('komentar');
-            $table->enum('status_before', ['review', 'revisi', 'approved'])->nullable()->after('reviewer_type');
-            $table->enum('status_after', ['review', 'revisi', 'approved'])->nullable()->after('status_before');
+            if (!Schema::hasColumn('komentars', 'reviewer_type')) {
+                $table->enum('reviewer_type', ['hsse', 'snd'])->nullable()->after('komentar');
+            }
+            if (!Schema::hasColumn('komentars', 'status_before')) {
+                $table->enum('status_before', ['review', 'revisi', 'approved'])->nullable()->after('reviewer_type');
+            }
+            if (!Schema::hasColumn('komentars', 'status_after')) {
+                $table->enum('status_after', ['review', 'revisi', 'approved'])->nullable()->after('status_before');
+            }
         });
 
         // Add review tracking columns to documents table
         Schema::table('documents', function (Blueprint $table) {
-            $table->enum('hsse_status', ['pending', 'reviewing', 'approved', 'rejected'])->default('pending')->after('status');
-            $table->enum('snd_status', ['pending', 'reviewing', 'approved', 'rejected'])->default('pending')->after('hsse_status');
-            $table->timestamp('hsse_review_started_at')->nullable()->after('tanggal_acc');
-            $table->timestamp('snd_review_started_at')->nullable()->after('hsse_review_started_at');
+            if (!Schema::hasColumn('documents', 'hsse_status')) {
+                $table->enum('hsse_status', ['pending', 'reviewing', 'approved', 'rejected'])->default('pending')->after('status');
+            }
+            if (!Schema::hasColumn('documents', 'snd_status')) {
+                $table->enum('snd_status', ['pending', 'reviewing', 'approved', 'rejected'])->default('pending')->after('hsse_status');
+            }
+            if (!Schema::hasColumn('documents', 'hsse_review_started_at')) {
+                $table->timestamp('hsse_review_started_at')->nullable()->after('tanggal_acc');
+            }
+            if (!Schema::hasColumn('documents', 'snd_review_started_at')) {
+                $table->timestamp('snd_review_started_at')->nullable()->after('hsse_review_started_at');
+            }
         });
     }
 

@@ -8,7 +8,7 @@ use App\Http\Controllers\DocumentDownloadController;
 
 
 Route::get('/', function () {
-    return view('welcome');
+    return redirect('/admin/login');
 });
 
 Route::get('/livewire/update', function () {
@@ -48,7 +48,7 @@ Route::middleware(['auth'])->group(function () {
     Route::put('/snd-comments/{comment}', [SndCommentController::class, 'update'])->name('snd-comments.update');
     Route::put('/snd-comments/{comment}/resolve', [SndCommentController::class, 'resolve'])->name('snd-comments.resolve');
     Route::delete('/snd-comments/{comment}', [SndCommentController::class, 'destroy'])->name('snd-comments.destroy');
-    
+
     // HSSE Comments Routes
     Route::post('/documents/{document}/hsse-comments', [HsseCommentController::class, 'store'])->name('hsse-comments.store');
     Route::get('/documents/{document}/hsse-comments', [HsseCommentController::class, 'index'])->name('hsse-comments.index');
@@ -58,6 +58,9 @@ Route::middleware(['auth'])->group(function () {
 
     // Document download with approval cover page (only if hsse_status & snd_status are approved)
     Route::get('/documents/{document}/download', [DocumentDownloadController::class, 'download'])->name('documents.download');
-    
 
+
+    // Document Approval Route
+    Route::get('/documents/{document}/approve', [\App\Http\Controllers\DocumentApprovalController::class, 'approve'])->name('documents.approve');
+    Route::post('/documents/{document}/reject', [\App\Http\Controllers\DocumentApprovalController::class, 'reject'])->name('documents.reject');
 });

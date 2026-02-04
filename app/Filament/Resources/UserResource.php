@@ -11,7 +11,7 @@ use Filament\Resources\Resource;
 use Filament\Forms\Components\Select;
 use Illuminate\Database\Eloquent\Builder;
 use App\Filament\Resources\UserResource\Pages;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
+
 use App\Filament\Resources\UserResource\RelationManagers;
 
 class UserResource extends Resource
@@ -34,13 +34,15 @@ class UserResource extends Resource
                 //Forms\Components\DateTimePicker::make('email_verified_at'),
                 Select::make('roles')->multiple()->relationship('roles', 'name')
                     ->preload()
+                    ->maxItems(1)
                     ->required(),
                 Forms\Components\TextInput::make('password')
                     ->visibleOn('create')
                     ->password()
                     ->required()
                     ->maxLength(255),
-            ]);
+            ])
+            ->columns(1);
     }
 
     public static function table(Table $table): Table
@@ -64,9 +66,7 @@ class UserResource extends Resource
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
-            ->filters([
-                Tables\Filters\TrashedFilter::make(),
-            ])
+
             ->actions([
                 //Tables\Actions\ViewAction::make(),
                 Tables\Actions\EditAction::make(),
@@ -75,8 +75,6 @@ class UserResource extends Resource
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make(),
-                    Tables\Actions\ForceDeleteBulkAction::make(),
-                    Tables\Actions\RestoreBulkAction::make(),
                 ]),
             ]);
     }
@@ -101,8 +99,6 @@ class UserResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
-            ->withoutGlobalScopes([
-                SoftDeletingScope::class,
-            ]);
+            ->with('roles');
     }
 }

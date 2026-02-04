@@ -78,7 +78,7 @@ class document extends Model
 
     public function sndComments(): HasMany
     {
-        return $this->hasMany(sndComment::class, 'document_id');
+        return $this->hasMany(SndComment::class, 'document_id');
     }
 
 
@@ -185,7 +185,7 @@ class document extends Model
     public function getRevisionReasons(): array
     {
         $reasons = [];
-        
+
         if ($this->hsse_status === 'revisi') {
             $latestHsseComment = $this->hsseComments()->latest()->first();
             if ($latestHsseComment) {
@@ -197,7 +197,7 @@ class document extends Model
                 ];
             }
         }
-        
+
         if ($this->snd_status === 'revisi') {
             $latestSndComment = $this->sndComments()->latest()->first();
             if ($latestSndComment) {
@@ -209,7 +209,7 @@ class document extends Model
                 ];
             }
         }
-        
+
         return $reasons;
     }
 }

@@ -17,4 +17,4 @@ use App\Http\Controllers\SndCommentController;
 
 Route::middleware('auth:sanctum')->group(function () {
     // S&D Comments API routes
-}
+});

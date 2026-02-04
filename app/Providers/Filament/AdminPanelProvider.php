@@ -27,7 +27,7 @@ class AdminPanelProvider extends PanelProvider
             ->default()
             ->id('admin')
             ->path('admin')
-            ->login()
+            ->login(\App\Filament\Pages\Auth\Login::class)
             ->brandName('Pertamina Patra Niaga')
             ->favicon(asset('images/pertamina.png'))
             ->colors([
@@ -40,8 +40,9 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
             ->widgets([
-                Widgets\AccountWidget::class,
-                Widgets\FilamentInfoWidget::class,
+                \App\Filament\Widgets\DocumentStatsOverview::class,
+                \App\Filament\Widgets\DocumentStatusChart::class,
+                \App\Filament\Widgets\DocumentStatusPieChart::class,
             ])
             ->middleware([
                 EncryptCookies::class,
