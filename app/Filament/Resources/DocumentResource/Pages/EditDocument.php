@@ -4,7 +4,7 @@ namespace App\Filament\Resources\DocumentResource\Pages;
 use Filament\Actions;
 use Filament\Forms\Form;
 use App\Models\HsseComment;
-use App\Models\SndComment;
+use App\Models\CrmComment;
 use App\Models\document;
 use Filament\Forms\Components\Grid;
 use Filament\Forms\Components\Section;
@@ -29,7 +29,7 @@ class EditDocument extends EditRecord
         $record = parent::resolveRecord($key);
 
         // Eager load relationships to prevent N+1 queries
-        $record->load(['mitra', 'hsse', 'snd', 'hsseComments.user', 'sndComments.user']);
+        $record->load(['mitra', 'hsse', 'crm', 'hsseComments.user', 'crmComments.user']);
 
         $user = auth()->user();
 
@@ -39,17 +39,17 @@ class EditDocument extends EditRecord
         }
 
         // Jika user adalah Mitra, izinkan edit jika:
-        // - Kedua status pending/revisi, atau
-        // - Salah satu approved dan yang lain pending/revisi
-        // Tidak diizinkan jika kedua approved atau salah satu reviewing/rejected
+        // - Kedua status pending/revisi/rejected, atau
+        // - Salah satu approved dan yang lain pending/revisi/rejected
+        // Tidak diizinkan jika kedua approved atau salah satu reviewing
         if ($user && $user->hasRole('Mitra')) {
             $hsse = $record->hsse_status;
-            $snd = $record->snd_status;
-            $isPendingOrRevisi = in_array($hsse, ['pending', 'revisi'], true) || in_array($snd, ['pending', 'revisi'], true);
-            $anyBlocked = in_array($hsse, ['reviewing', 'rejected'], true) || in_array($snd, ['reviewing', 'rejected'], true);
-            $bothApproved = ($hsse === 'approved') && ($snd === 'approved');
-            if (!$isPendingOrRevisi || $anyBlocked || $bothApproved) {
-                abort(403, 'Dokumen ini tidak dapat diedit. Mitra dapat mengedit jika ada status pending/revisi dan tidak ada status reviewing/rejected, serta tidak keduanya approved.');
+            $crm = $record->crm_status;
+            $canEdit = in_array($hsse, ['pending', 'revisi', 'rejected'], true) || in_array($crm, ['pending', 'revisi', 'rejected'], true);
+            $anyReviewing = in_array($hsse, ['reviewing'], true) || in_array($crm, ['reviewing'], true);
+            $bothApproved = ($hsse === 'approved') && ($crm === 'approved');
+            if (!$canEdit || $anyReviewing || $bothApproved) {
+                abort(403, 'Dokumen ini tidak dapat diedit. Mitra dapat mengedit jika ada status pending/revisi/rejected dan tidak ada status reviewing, serta tidak keduanya approved.');
             }
         }
 
@@ -71,8 +71,17 @@ class EditDocument extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            Actions\ViewAction::make(),
-            Actions\DeleteAction::make(),
+            Actions\Action::make('back')
+                ->label('Kembali')
+                ->icon('heroicon-o-arrow-left')
+                ->color('gray')
+                ->url(function () {
+                    $user = auth()->user();
+                    if ($user && ($user->hasRole('HSSE') || $user->hasRole('CRM'))) {
+                        return $this->getResource()::getUrl('view', ['record' => $this->getRecord()]);
+                    }
+                    return $this->getResource()::getUrl('index');
+                }),
             Actions\ForceDeleteAction::make(),
             Actions\RestoreAction::make(),
         ];
@@ -82,6 +91,91 @@ class EditDocument extends EditRecord
     {
         // Redirect ke halaman list dokumen setelah save changes
         return $this->getResource()::getUrl('index');
+    }
+
+    protected function getFormActions(): array
+    {
+        $user = auth()->user();
+
+        // Jika user adalah Mitra, tambahkan konfirmasi pada Save Changes
+        if ($user && $user->hasRole('Mitra')) {
+            return [
+                \Filament\Actions\Action::make('save')
+                    ->label('Simpan Perubahan')
+                    ->requiresConfirmation()
+                    ->modalHeading('⚠️ Konfirmasi Perubahan Dokumen')
+                    ->modalDescription('Pastikan semua perubahan yang Anda buat sudah benar sebelum menyimpan. Setelah disimpan, dokumen akan dikembalikan ke status "Pending" untuk direview ulang oleh reviewer. Apakah Anda yakin ingin menyimpan perubahan ini?')
+                    ->modalSubmitActionLabel('Ya, Simpan Perubahan')
+                    ->modalCancelActionLabel('Batal')
+                    ->modalIcon('heroicon-o-arrow-path')
+                    ->modalIconColor('warning')
+                    ->color('warning')
+                    ->action(function () {
+                        // Validate and get form data
+                        $data = $this->form->getState();
+
+                        // Update the record
+                        $this->record = $this->handleRecordUpdate($this->record, $data);
+
+                        // Show success notification (already handled in handleRecordUpdate)
+        
+                        // Redirect to index
+                        $this->redirect($this->getRedirectUrl());
+                    }),
+                \Filament\Actions\Action::make('cancel')
+                    ->label('Batal')
+                    ->url($this->getResource()::getUrl('index'))
+                    ->color('gray'),
+            ];
+        }
+
+        // Jika user adalah HSSE, tambahkan konfirmasi pada Save
+        if ($user && $user->hasRole('HSSE')) {
+            return [
+                \Filament\Actions\Action::make('save')
+                    ->label('Simpan Komentar')
+                    ->requiresConfirmation()
+                    ->modalHeading('Konfirmasi Simpan Komentar')
+                    ->modalDescription('Apakah Anda yakin dengan komentar yang diberikan?')
+                    ->modalSubmitActionLabel('Ya, Simpan')
+                    ->modalCancelActionLabel('Batal')
+                    ->color('primary')
+                    ->action(function () {
+                        $this->save();
+                    }),
+                \Filament\Actions\Action::make('cancel')
+                    ->label('Batal')
+                    ->url(function () {
+                        return $this->getResource()::getUrl('view', ['record' => $this->getRecord()]);
+                    })
+                    ->color('gray'),
+            ];
+        }
+
+        // Jika user adalah CRM, tambahkan konfirmasi pada Save
+        if ($user && $user->hasRole('CRM')) {
+            return [
+                \Filament\Actions\Action::make('save')
+                    ->label('Simpan Komentar')
+                    ->requiresConfirmation()
+                    ->modalHeading('Konfirmasi Simpan Komentar')
+                    ->modalDescription('Apakah Anda yakin dengan komentar yang diberikan?')
+                    ->modalSubmitActionLabel('Ya, Simpan')
+                    ->modalCancelActionLabel('Batal')
+                    ->color('primary')
+                    ->action(function () {
+                        $this->save();
+                    }),
+                \Filament\Actions\Action::make('cancel')
+                    ->label('Batal')
+                    ->url(function () {
+                        return $this->getResource()::getUrl('view', ['record' => $this->getRecord()]);
+                    })
+                    ->color('gray'),
+            ];
+        }
+
+        return parent::getFormActions();
     }
 
     public function form(Form $form): Form
@@ -95,21 +189,22 @@ class EditDocument extends EditRecord
                                 TextInput::make('judul_dokumen')
                                     ->required()
                                     ->maxLength(255)
-                                    ->disabled(fn() => auth()->user()->hasRole('HSSE') || auth()->user()->hasRole('S&D'))
-                                    ->dehydrated(fn() => !(auth()->user()->hasRole('HSSE') || auth()->user()->hasRole('S&D'))),
+                                    ->disabled(fn() => auth()->user()->hasRole('HSSE') || auth()->user()->hasRole('CRM'))
+                                    ->dehydrated(fn() => !(auth()->user()->hasRole('HSSE') || auth()->user()->hasRole('CRM'))),
                                 FileUpload::make('file')
                                     ->label('PDF File')
                                     ->acceptedFileTypes(['application/pdf'])
                                     ->required()
                                     ->maxSize(10240)
                                     ->helperText('Upload a PDF file (max 10MB)')
-                                    ->disabled(fn() => auth()->user()->hasRole('HSSE') || auth()->user()->hasRole('S&D'))
-                                    ->dehydrated(fn() => !(auth()->user()->hasRole('HSSE') || auth()->user()->hasRole('S&D'))),
+                                    ->disabled(fn() => auth()->user()->hasRole('HSSE') || auth()->user()->hasRole('CRM'))
+                                    ->dehydrated(fn() => !(auth()->user()->hasRole('HSSE') || auth()->user()->hasRole('CRM'))),
                                 Textarea::make('keterangan')
                                     ->label('Keterangan Dokumen')
                                     ->placeholder('Masukkan keterangan tambahan untuk dokumen ini...')
                                     ->rows(4)
                                     ->maxLength(5000)
+                                    ->required()
                                     ->columnSpanFull()
                                     ->visible(auth()->user()->hasRole('Mitra')),
                             ])
@@ -123,39 +218,43 @@ class EditDocument extends EditRecord
                                         if (!$record)
                                             return 'Status tidak tersedia';
 
-                                        $html = '<div class="grid grid-cols-2 gap-4">';
+                                        // Untuk dokumen HSSE, hanya tampilkan HSSE status
+                                        if ($record->document_type === 'hsse') {
+                                            $hsseColor = match ($record->hsse_status) {
+                                                'approved' => 'bg-green-100 text-green-800 border-green-200',
+                                                'rejected' => 'bg-red-100 text-red-800 border-red-200',
+                                                'revisi' => 'bg-yellow-100 text-yellow-800 border-yellow-200',
+                                                'reviewing' => 'bg-blue-100 text-blue-800 border-blue-200',
+                                                default => 'bg-gray-100 text-gray-800 border-gray-200'
+                                            };
 
-                                        // HSSE Status
-                                        $hsseColor = match ($record->hsse_status) {
-                                            'approved' => 'bg-green-100 text-green-800 border-green-200',
-                                            'rejected' => 'bg-red-100 text-red-800 border-red-200',
-                                            'revisi' => 'bg-yellow-100 text-yellow-800 border-yellow-200',
-                                            'reviewing' => 'bg-blue-100 text-blue-800 border-blue-200',
-                                            default => 'bg-gray-100 text-gray-800 border-gray-200'
-                                        };
+                                            $html = '<div class="p-4 border rounded-lg ' . $hsseColor . '">';
+                                            $html .= '<div class="font-semibold text-lg">HSSE Status</div>';
+                                            $html .= '<div class="text-sm mt-1">' . ucfirst($record->hsse_status ?? 'pending') . '</div>';
+                                            $html .= '</div>';
 
-                                        $html .= '<div class="p-3 border rounded-lg ' . $hsseColor . '">';
-                                        $html .= '<div class="font-semibold">HSSE Status</div>';
-                                        $html .= '<div class="text-sm">' . ucfirst($record->hsse_status ?? 'pending') . '</div>';
-                                        $html .= '</div>';
+                                            return new \Illuminate\Support\HtmlString($html);
+                                        }
 
-                                        // SND Status
-                                        $sndColor = match ($record->snd_status) {
-                                            'approved' => 'bg-green-100 text-green-800 border-green-200',
-                                            'rejected' => 'bg-red-100 text-red-800 border-red-200',
-                                            'revisi' => 'bg-yellow-100 text-yellow-800 border-yellow-200',
-                                            'reviewing' => 'bg-blue-100 text-blue-800 border-blue-200',
-                                            default => 'bg-gray-100 text-gray-800 border-gray-200'
-                                        };
+                                        // Untuk dokumen CRM, hanya tampilkan CRM status
+                                        if ($record->document_type === 'crm') {
+                                            $crmColor = match ($record->crm_status) {
+                                                'approved' => 'bg-green-100 text-green-800 border-green-200',
+                                                'rejected' => 'bg-red-100 text-red-800 border-red-200',
+                                                'revisi' => 'bg-yellow-100 text-yellow-800 border-yellow-200',
+                                                'reviewing' => 'bg-blue-100 text-blue-800 border-blue-200',
+                                                default => 'bg-gray-100 text-gray-800 border-gray-200'
+                                            };
 
-                                        $html .= '<div class="p-3 border rounded-lg ' . $sndColor . '">';
-                                        $html .= '<div class="font-semibold">S&D Status</div>';
-                                        $html .= '<div class="text-sm">' . ucfirst($record->snd_status ?? 'pending') . '</div>';
-                                        $html .= '</div>';
+                                            $html = '<div class="p-4 border rounded-lg ' . $crmColor . '">';
+                                            $html .= '<div class="font-semibold text-lg">CRM Status</div>';
+                                            $html .= '<div class="text-sm mt-1">' . ucfirst($record->crm_status ?? 'pending') . '</div>';
+                                            $html .= '</div>';
 
-                                        $html .= '</div>';
+                                            return new \Illuminate\Support\HtmlString($html);
+                                        }
 
-                                        return new \Illuminate\Support\HtmlString($html);
+                                        return 'Status tidak tersedia';
                                     })
                                     ->columnSpanFull()
                                     ->visible(auth()->user()->hasRole('Mitra')),
@@ -237,21 +336,22 @@ class EditDocument extends EditRecord
                                     ->dehydrated(false)
                                     ->columnSpanFull(),
                             ])
-                            ->columnSpan(['lg' => 2]),
+                            ->columnSpan(['lg' => 2])
+                            ->visible(fn($record) => $record && $record->document_type === 'hsse'),
 
-                        Section::make('S&D Comments')
+                        Section::make('CRM Comments')
                             ->schema([
                                 Textarea::make('new_snd_comment')
-                                    ->label('Add New S&D Comment')
+                                    ->label('Add New CRM Comment')
                                     ->placeholder('Enter your comment or feedback about this document...')
                                     ->rows(4)
                                     ->maxLength(2000)
                                     ->columnSpanFull()
-                                    ->visible(auth()->user()->hasRole('S&D')),
+                                    ->visible(auth()->user()->hasRole('CRM')),
 
                                 Repeater::make('existing_snd_comments')
-                                    ->label('Previous S&D Comments')
-                                    ->relationship('sndComments')
+                                    ->label('Previous CRM Comments')
+                                    ->relationship('crmComments')
                                     ->schema([
                                         Textarea::make('komentar')
                                             ->label('Comment')
@@ -271,7 +371,8 @@ class EditDocument extends EditRecord
                                     ->dehydrated(false)
                                     ->columnSpanFull(),
                             ])
-                            ->columnSpan(['lg' => 2]),
+                            ->columnSpan(['lg' => 2])
+                            ->visible(fn($record) => $record && $record->document_type === 'crm'),
                     ]),
             ]);
     }
@@ -280,7 +381,7 @@ class EditDocument extends EditRecord
     {
         // Extract new comments before parent update
         $newHsseComment = $data['new_hsse_comment'] ?? null;
-        $newSndComment = $data['new_snd_comment'] ?? null;
+        $newCrmComment = $data['new_snd_comment'] ?? null;
         unset($data['new_hsse_comment']);
         unset($data['new_snd_comment']);
 
@@ -292,22 +393,22 @@ class EditDocument extends EditRecord
         if ($currentUser->hasRole('Mitra')) {
             $statusChanged = false;
 
-            // Ubah status HSSE menjadi pending jika saat ini adalah 'revisi'
-            if ($record->hsse_status === 'revisi') {
+            // Ubah status HSSE menjadi pending jika saat ini adalah 'revisi' atau 'rejected'
+            if (in_array($record->hsse_status, ['revisi', 'rejected'])) {
                 $record->hsse_status = 'pending';
                 $statusChanged = true;
             }
 
-            // Ubah status SND menjadi pending jika saat ini adalah 'revisi'
-            if ($record->snd_status === 'revisi') {
-                $record->snd_status = 'pending';
+            // Ubah status CRM menjadi pending jika saat ini adalah 'revisi' atau 'rejected'
+            if (in_array($record->crm_status, ['revisi', 'rejected'])) {
+                $record->crm_status = 'pending';
                 $statusChanged = true;
             }
 
-            // Reset review timestamps jika status berubah (tetap pertahankan id_hsse dan id_snd)
+            // Reset review timestamps jika status berubah (tetap pertahankan id_hsse dan id_crm)
             if ($statusChanged) {
                 $record->hsse_review_started_at = null;
-                $record->snd_review_started_at = null;
+                $record->crm_review_started_at = null;
             }
 
             $record->save();
@@ -352,18 +453,18 @@ class EditDocument extends EditRecord
                 ->send();
         }
 
-        // Save new S&D comment if provided and user has S&D role
-        if (!empty($newSndComment) && $currentUser->hasRole('S&D')) {
-            sndComment::create([
+        // Save new CRM comment if provided and user has S&D role
+        if (!empty($newCrmComment) && $currentUser->hasRole('CRM')) {
+            CrmComment::create([
                 'document_id' => $record->getKey(),
                 'user_id' => $currentUserId,
-                'komentar' => $newSndComment,
+                'komentar' => $newCrmComment,
             ]);
 
-            // Update S&D status to revisi and set S&D user when comment is saved
+            // Update CRM status to revisi and set S&D user when comment is saved
             $record->update([
-                'snd_status' => 'revisi',
-                'id_snd' => $currentUserId
+                'crm_status' => 'revisi',
+                'id_crm' => $currentUserId
             ]);
 
             // Tampilkan notifikasi atau pesan bahwa S&D telah memberikan revisi

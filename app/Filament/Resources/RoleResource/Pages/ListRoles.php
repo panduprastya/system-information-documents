@@ -12,7 +12,8 @@ class ListRoles extends BaseListRoles
     public function getHeaderActions(): array
     {
         return [
-            Actions\CreateAction::make(),
+            Actions\CreateAction::make()
+                ->label('Add Role'),
         ];
     }
 }

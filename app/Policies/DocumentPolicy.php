@@ -25,16 +25,16 @@ class DocumentPolicy
      */
     public function view(User $user, document $document): bool
     {
-        // Admin, HSSE, S&D dapat melihat semua dokumen
-        if ($user->hasRole(['Admin', 'HSSE', 'S&D'])) {
+        // Admin, HSSE, CRM dapat melihat semua dokumen
+        if ($user->hasRole(['Admin', 'HSSE', 'CRM'])) {
             return true;
         }
-        
+
         // Mitra hanya dapat melihat dokumen mereka sendiri
         if ($user->hasRole('Mitra')) {
             return $document->id_mitra === $user->id;
         }
-        
+
         return false;
     }
 
@@ -56,17 +56,17 @@ class DocumentPolicy
         if ($user->hasRole('Admin')) {
             return false;
         }
-        
+
         // Mitra hanya dapat mengedit dokumen mereka sendiri
         if ($user->hasRole('Mitra')) {
             return $document->id_mitra === $user->id;
         }
-        
-        // HSSE dan S&D dapat mengedit dokumen
-        if ($user->hasRole(['HSSE', 'S&D'])) {
+
+        // HSSE dan CRM dapat mengedit dokumen
+        if ($user->hasRole(['HSSE', 'CRM'])) {
             return true;
         }
-        
+
         return false;
     }
 
@@ -75,8 +75,33 @@ class DocumentPolicy
      */
     public function delete(User $user, document $document): bool
     {
-        // Hanya Admin yang dapat menghapus dokumen
-        return $user->hasRole('Admin');
+        // Admin dapat menghapus semua dokumen
+        if ($user->hasRole('Admin')) {
+            return true;
+        }
+
+        // Mitra dapat menghapus dokumen mereka sendiri jika status masih pending
+        if ($user->hasRole('Mitra')) {
+            // Pastikan dokumen milik Mitra yang login
+            if ($document->id_mitra !== $user->id) {
+                return false;
+            }
+
+            // Untuk dokumen HSSE, cek hsse_status
+            if ($document->document_type === 'hsse') {
+                return $document->hsse_status === 'pending';
+            }
+
+            // Untuk dokumen CRM, cek crm_status
+            if ($document->document_type === 'crm') {
+                return $document->crm_status === 'pending';
+            }
+
+            return false;
+        }
+
+        // HSSE dan CRM tidak dapat menghapus dokumen
+        return false;
     }
 
     /**
@@ -93,8 +118,33 @@ class DocumentPolicy
      */
     public function forceDelete(User $user, document $document): bool
     {
-        // Hanya Admin yang dapat force delete dokumen
-        return $user->hasRole('Admin');
+        // Admin dapat force delete semua dokumen
+        if ($user->hasRole('Admin')) {
+            return true;
+        }
+
+        // Mitra dapat force delete dokumen mereka sendiri jika status masih pending
+        if ($user->hasRole('Mitra')) {
+            // Pastikan dokumen milik Mitra yang login
+            if ($document->id_mitra !== $user->id) {
+                return false;
+            }
+
+            // Untuk dokumen HSSE, cek hsse_status
+            if ($document->document_type === 'hsse') {
+                return $document->hsse_status === 'pending';
+            }
+
+            // Untuk dokumen CRM, cek crm_status
+            if ($document->document_type === 'crm') {
+                return $document->crm_status === 'pending';
+            }
+
+            return false;
+        }
+
+        // HSSE dan CRM tidak dapat force delete dokumen
+        return false;
     }
 
     /**
@@ -113,22 +163,22 @@ class DocumentPolicy
         }
 
         // Check signature type
-        if (!in_array($signatureType, ['hsse', 'snd'])) {
+        if (!in_array($signatureType, ['hsse', 'crm'])) {
             return false;
         }
 
         // HSSE can only sign if they are assigned as HSSE reviewer
         if ($signatureType === 'hsse') {
-            return $user->hasRole('HSSE') && 
-                   $document->id_hsse === $user->id &&
-                   $document->hsse_status === 'approved';
+            return $user->hasRole('HSSE') &&
+                $document->id_hsse === $user->id &&
+                $document->hsse_status === 'approved';
         }
 
-        // SND can only sign if they are assigned as SND reviewer
-        if ($signatureType === 'snd') {
-            return $user->hasRole('SND') && 
-                   $document->id_snd === $user->id &&
-                   $document->snd_status === 'approved';
+        // CRM can only sign if they are assigned as CRM reviewer
+        if ($signatureType === 'crm') {
+            return $user->hasRole('CRM') &&
+                $document->id_crm === $user->id &&
+                $document->crm_status === 'approved';
         }
 
         return false;

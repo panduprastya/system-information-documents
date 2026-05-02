@@ -31,32 +31,39 @@ class DocumentResource extends Resource
         return $form
             ->schema([
                 Forms\Components\TextInput::make('judul_dokumen')
+                    ->label('Judul Dokumen')
+                    ->placeholder('Masukkan judul dokumen yang jelas dan deskriptif')
                     ->required()
                     ->maxLength(255)
+                    ->helperText('Contoh: Laporan Keselamatan Kerja Bulan Januari 2026')
+                    ->columnSpanFull(),
+                Forms\Components\Select::make('document_type')
+                    ->label('Tipe Dokumen')
+                    ->options([
+                        'hsse' => 'HSSE (Health, Safety, Security & Environment)',
+                        'crm' => 'CRM (Channel Reliability Management)',
+                    ])
+                    ->required()
+                    ->default('hsse')
+                    ->helperText(new \Illuminate\Support\HtmlString('<span style="color: #dc2626; font-size: 14px; font-weight: 600;">⚠️ PENTING: Pilih tipe dokumen yang sesuai. Dokumen HSSE akan direview oleh tim HSSE, sedangkan dokumen CRM akan direview oleh tim CRM.</span>'))
+                    ->visible($isMitra)
                     ->columnSpanFull(),
                 FileUpload::make('file')
+                    ->label('File Dokumen (PDF)')
                     ->required()
                     ->acceptedFileTypes(['application/pdf'])
                     ->maxSize(10240) // Maksimal 10 MB (dalam kilobytes)
-                    ->helperText('Format file harus PDF. Ukuran file maksimal 10 MB')
+                    ->helperText('📄 Upload file dalam format PDF dengan ukuran maksimal 10 MB')
                     ->columnSpanFull(),
                 Forms\Components\Textarea::make('keterangan')
                     ->label('Keterangan Dokumen')
-                    ->placeholder('Masukkan keterangan tambahan untuk dokumen ini...')
+                    ->placeholder('Masukkan keterangan atau catatan tambahan untuk dokumen ini...')
                     ->rows(4)
                     ->maxLength(5000)
+                    ->required()
+                    ->helperText('Anda dapat menambahkan informasi tambahan seperti periode dokumen, tujuan, atau catatan khusus lainnya')
                     ->columnSpanFull()
-                    ->visible($isMitra),
-                // Field id_mitra hanya untuk Admin, HSSE, S&D
-                Forms\Components\Select::make('id_mitra')
-                    ->label('Pilih Mitra')
-                    ->relationship('mitra', 'name')
-                    ->searchable()
-                    ->preload()
-                    ->visible(!$isMitra)
-                    ->required(!$isMitra)
-                    ->disabled($isMitra) // Disable field untuk Mitra
-                    ->columnSpanFull(),
+                    ->visible($isMitra)
             ]);
     }
 
@@ -70,6 +77,20 @@ class DocumentResource extends Resource
                     ->label('Nama Mitra')
                     ->searchable()
                     ->sortable(),
+                Tables\Columns\TextColumn::make('document_type')
+                    ->label('Tipe Dokumen')
+                    ->badge()
+                    ->color(fn(string $state): string => match ($state) {
+                        'hsse' => 'info',
+                        'crm' => 'warning',
+                        default => 'gray',
+                    })
+                    ->formatStateUsing(fn(string $state): string => match ($state) {
+                        'hsse' => 'HSSE',
+                        'crm' => 'CRM',
+                        default => strtoupper($state),
+                    })
+                    ->sortable(),
                 // Tables\Columns\TextColumn::make('file')
                 //     ->searchable(),
                 Tables\Columns\TextColumn::make('keterangan')
@@ -77,10 +98,16 @@ class DocumentResource extends Resource
                     ->limit(60)
                     ->wrap()
                     ->toggleable()
-                    ->visible(auth()->user()->hasRole('Mitra') || auth()->user()->hasRole('Admin') || auth()->user()->hasRole('HSSE') || auth()->user()->hasRole('S&D')),
-                Tables\Columns\TextColumn::make('hsse_status')
-                    ->label('HSSE Status')
+                    ->visible(auth()->user()->hasRole('Mitra') || auth()->user()->hasRole('Admin') || auth()->user()->hasRole('HSSE') || auth()->user()->hasRole('CRM')),
+                Tables\Columns\TextColumn::make('status')
+                    ->label('Status')
                     ->badge()
+                    ->state(function (Document $record): string {
+                        // Return status sesuai document_type
+                        return $record->document_type === 'hsse'
+                            ? $record->hsse_status
+                            : $record->crm_status;
+                    })
                     ->color(fn(string $state): string => match ($state) {
                         'pending' => 'gray',
                         'reviewing' => 'warning',
@@ -94,116 +121,28 @@ class DocumentResource extends Resource
                         'reviewing' => 'heroicon-o-eye',
                         'approved' => 'heroicon-o-check-circle',
                         'rejected' => 'heroicon-o-x-circle',
+                        'revisi' => 'heroicon-o-arrow-path',
                         default => 'heroicon-o-question-mark-circle',
                     })
-                    ->sortable(),
-                Tables\Columns\TextColumn::make('snd_status')
-                    ->label('S&D Status')
-                    ->badge()
-                    ->color(fn(string $state): string => match ($state) {
-                        'pending' => 'gray',
-                        'review' => 'warning',
-                        'approved' => 'success',
-                        'rejected' => 'danger',
-                        'revisi' => 'info',
-                        default => 'gray',
-                    })
-                    ->icon(fn(string $state): string => match ($state) {
-                        'pending' => 'heroicon-o-clock',
-                        'review' => 'heroicon-o-eye',
-                        'approved' => 'heroicon-o-check-circle',
-                        'rejected' => 'heroicon-o-x-circle',
-                        default => 'heroicon-o-question-mark-circle',
-                    })
-                    ->sortable(),
-                // Tables\Columns\TextColumn::make('tanggal_upload')
-                //     ->dateTime()
-                //     ->sortable(),
-                // Tables\Columns\TextColumn::make('tanggal_acc')
-                //     ->dateTime()
-                //     ->sortable(),
+                    ->sortable(query: function ($query, string $direction): void {
+                        // Sort berdasarkan document_type
+                        $query->orderByRaw("
+                            CASE 
+                                WHEN document_type = 'hsse' THEN hsse_status 
+                                ELSE crm_status 
+                            END {$direction}
+                        ");
+                    }),
                 Tables\Columns\TextColumn::make('HSSE.name')
                     ->label('Nama HSSE')
                     ->searchable()
-                    ->sortable(),
-                // Tables\Columns\TextColumn::make('hsseComments')
-                //     ->label('HSSE Comments')
-                //     ->formatStateUsing(function ($state, $record) {
-                //         $comments = $record->hsseComments()->with('user')->get();
-                //         if ($comments->isEmpty()) {
-                //             return 'No comments';
-                //         }
-
-                //         $latestComment = $comments->first();
-                //         $count = $comments->count();
-
-                //         $text = $latestComment->komentar ?? '';
-                //         if (strlen($text) > 50) {
-                //             $text = substr($text, 0, 50) . '...';
-                //         }
-
-                //         return $count > 1
-                //             ? $text . " ({$count} comments)"
-                //             : $text;
-                //     })
-                //     ->tooltip(function ($record) {
-                //         $comments = $record->hsseComments()->with('user')->get();
-                //         if ($comments->isEmpty()) {
-                //             return 'No comments';
-                //         }
-
-                //         return $comments->map(function ($comment) {
-                //             $userName = $comment->user ? $comment->user->name : 'Unknown';
-                //             return $userName . ': ' . $comment->komentar;
-                //         })->implode("\n");
-                //     })
-                //     ->searchable(query: function (Builder $query, string $search): Builder {
-                //         return $query->whereHas('hsseComments', function ($query) use ($search) {
-                //             $query->where('komentar', 'like', "%{$search}%");
-                //         });
-                //     })
-                //     ->sortable(),
-                Tables\Columns\TextColumn::make('snd.name')
-                    ->label('Nama S&D')
+                    ->sortable()
+                    ->visible(fn($record) => $record && $record->document_type === 'hsse'),
+                Tables\Columns\TextColumn::make('crm.name')
+                    ->label('Nama CRM')
                     ->searchable()
-                    ->sortable(),
-                // Tables\Columns\TextColumn::make('sndComments')
-                //     ->label('S&D Comments')
-                //     ->formatStateUsing(function ($state, $record) {
-                //         $comments = $record->sndComments()->with('user')->get();
-                //         if ($comments->isEmpty()) {
-                //             return 'No comments';
-                //         }
-
-                //         $latestComment = $comments->first();
-                //         $count = $comments->count();
-
-                //         $text = $latestComment->komentar ?? '';
-                //         if (strlen($text) > 50) {
-                //             $text = substr($text, 0, 50) . '...';
-                //         }
-
-                //         return $count > 1
-                //             ? $text . " ({$count} comments)"
-                //             : $text;
-                //     })
-                //     ->tooltip(function ($record) {
-                //         $comments = $record->sndComments()->with('user')->get();
-                //         if ($comments->isEmpty()) {
-                //             return 'No comments';
-                //         }
-
-                //         return $comments->map(function ($comment) {
-                //             $userName = $comment->user ? $comment->user->name : 'Unknown';
-                //             return $userName . ': ' . $comment->komentar;
-                //         })->implode("\n");
-                //     })
-                //     ->searchable(query: function (Builder $query, string $search): Builder {
-                //         return $query->whereHas('sndComments', function ($query) use ($search) {
-                //             $query->where('komentar', 'like', "%{$search}%");
-                //         });
-                //     })
-                //     ->sortable(),
+                    ->sortable()
+                    ->visible(fn($record) => $record && $record->document_type === 'crm'),
                 Tables\Columns\TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -219,6 +158,12 @@ class DocumentResource extends Resource
             ])
             ->filters([
                 Tables\Filters\TrashedFilter::make(),
+                Tables\Filters\SelectFilter::make('document_type')
+                    ->label('Tipe Dokumen')
+                    ->options([
+                        'hsse' => 'HSSE',
+                        'crm' => 'CRM',
+                    ]),
                 Tables\Filters\SelectFilter::make('hsse_status')
                     ->label('HSSE Status')
                     ->options([
@@ -228,8 +173,8 @@ class DocumentResource extends Resource
                         'rejected' => 'Rejected',
                         'revisi' => 'Revisi',
                     ]),
-                Tables\Filters\SelectFilter::make('snd_status')
-                    ->label('S&D Status')
+                Tables\Filters\SelectFilter::make('crm_status')
+                    ->label('CRM Status')
                     ->options([
                         'pending' => 'Pending',
                         'reviewing' => 'Reviewing',
@@ -247,84 +192,89 @@ class DocumentResource extends Resource
                     ->openUrlInNewTab()
                     ->visible(function (Document $record) {
                         $user = auth()->user();
-                        return $user && $user->hasRole('Mitra') &&
-                            $record->hsse_status === 'approved' && $record->snd_status === 'approved';
+
+                        if (!$user || !$user->hasRole('Mitra')) {
+                            return false;
+                        }
+
+                        // Untuk dokumen HSSE, hanya cek hsse_status
+                        if ($record->document_type === 'hsse') {
+                            return $record->hsse_status === 'approved';
+                        }
+
+                        // Untuk dokumen CRM, hanya cek crm_status
+                        if ($record->document_type === 'crm') {
+                            return $record->crm_status === 'approved';
+                        }
+
+                        return false;
                     }),
-
-                // Tables\Actions\Action::make('revision_info')
-                //     ->label('Info Revisi')
-                //     ->icon('heroicon-o-information-circle')
-                //     ->color('warning')
-                //     ->visible(function (Document $record) {
-                //         $user = auth()->user();
-                //         return $user && $user->hasRole('Mitra') && $record->needsRevision();
-                //     })
-                //     ->action(function (Document $record) {
-                //         $reasons = $record->getRevisionReasons();
-                //         $message = "Dokumen ini memerlukan revisi:\n\n";
-
-                //         foreach ($reasons as $reason) {
-                //             $message .= "{$reason['type']} Review:\n";
-                //             $message .= "Alasan: {$reason['comment']}\n";
-                //             $message .= "Reviewer: {$reason['reviewer']}\n";
-                //             $message .= "Tanggal: {$reason['date']->format('d/m/Y H:i')}\n\n";
-                //         }
-
-                //         $message .= "Silakan edit dokumen untuk melakukan revisi sesuai feedback di atas.";
-
-                //         Notification::make()
-                //             ->title('Informasi Revisi')
-                //             ->body($message)
-                //             ->persistent()
-                //             ->send();
-                //     }),
                 Tables\Actions\EditAction::make()
                     ->visible(function (Document $record) {
                         $user = auth()->user();
 
-                        // Admin cannot edit documents
+                        // Admin cannot edit document
                         if ($user->hasRole('Admin')) {
                             return false;
                         }
 
-                        // Mitra can edit when:
-                        // - both statuses are pending/revisi, OR
-                        // - one status is approved and the other is pending/revisi
-                        // Not allowed when both are approved, or when any is reviewing/rejected
+                        // Mitra can edit based on document type
                         if ($user->hasRole('Mitra')) {
-                            $hsse = $record->hsse_status;
-                            $snd = $record->snd_status;
-                            $isPendingOrRevisi = fn(string $s) => in_array($s, ['pending', 'revisi'], true);
-                            $isApproved = fn(string $s) => $s === 'approved';
-                            $isBlocked = fn(string $s) => in_array($s, ['reviewing', 'rejected'], true);
-
-                            if ($isBlocked($hsse) || $isBlocked($snd)) {
-                                return false;
+                            // Untuk dokumen HSSE, hanya cek hsse_status
+                            if ($record->document_type === 'hsse') {
+                                $status = $record->hsse_status;
+                                // Bisa edit jika pending, revisi, atau rejected
+                                // Tidak bisa edit jika reviewing atau approved
+                                return in_array($status, ['pending', 'revisi', 'rejected'], true);
                             }
 
-                            if ($isApproved($hsse) && $isApproved($snd)) {
-                                return false;
+                            // Untuk dokumen CRM, hanya cek crm_status
+                            if ($record->document_type === 'crm') {
+                                $status = $record->crm_status;
+                                return in_array($status, ['pending', 'revisi', 'rejected'], true);
                             }
-
-                            return $isPendingOrRevisi($hsse) || $isPendingOrRevisi($snd);
                         }
 
-                        // HSSE and S&D users cannot edit documents (they can only review)
+                        // HSSE and CRM users cannot edit documents (they can only review)
                         return false;
                     }),
                 Tables\Actions\DeleteAction::make()
                     ->visible(function (Document $record) {
                         $user = auth()->user();
+
                         // Admin can always delete
                         if ($user->hasRole('Admin')) {
                             return true;
                         }
-                        // Mitra can delete ONLY when both statuses are pending
+
+                        // Mitra can delete ONLY their own documents when status is pending
                         if ($user->hasRole('Mitra')) {
-                            return ($record->hsse_status === 'pending') && ($record->snd_status === 'pending');
+                            // Pastikan dokumen milik Mitra yang login
+                            if ($record->id_mitra !== $user->id) {
+                                return false;
+                            }
+
+                            // Untuk dokumen HSSE, button delete hanya muncul jika hsse_status = pending
+                            if ($record->document_type === 'hsse') {
+                                return $record->hsse_status === 'pending';
+                            }
+
+                            // Untuk dokumen CRM, button delete hanya muncul jika crm_status = pending
+                            if ($record->document_type === 'crm') {
+                                return $record->crm_status === 'pending';
+                            }
+
+                            return false;
                         }
+
+                        // HSSE dan CRM tidak bisa delete dokumen
                         return false;
                     })
+                    ->requiresConfirmation()
+                    ->modalHeading('Hapus Dokumen')
+                    ->modalDescription('Apakah Anda yakin ingin menghapus dokumen ini?')
+                    ->modalSubmitActionLabel('Ya, Hapus')
+                    ->modalCancelActionLabel('Batal')
                     ->action(function (Document $record) {
                         if ($record->file) {
                             \Illuminate\Support\Facades\Storage::disk('public')->delete($record->file);
@@ -332,7 +282,7 @@ class DocumentResource extends Resource
                         $record->forceDelete();
 
                         Notification::make()
-                            ->title('Deleted successfully')
+                            ->title('Dokumen berhasil dihapus')
                             ->success()
                             ->send();
                     }),
@@ -342,16 +292,18 @@ class DocumentResource extends Resource
                     ->visible(function (Document $record) {
                         $user = auth()->user();
 
-                        // Don't show review button if both statuses are approved
-                        if ($record->hsse_status === 'approved' && $record->snd_status === 'approved') {
-                            return false;
-                        }
-
-                        // HSSE can only review if their status is pending or reviewing AND they are the assigned reviewer (if any)
+                        // HSSE can only review HSSE documents
                         if ($user->hasRole('HSSE')) {
+                            // Cek apakah dokumen adalah tipe HSSE
+                            if ($record->document_type !== 'hsse') {
+                                return false;
+                            }
+
+                            // Cek status
                             if (!in_array($record->hsse_status, ['pending', 'reviewing'])) {
                                 return false;
                             }
+
                             // If a previous HSSE reviewer exists, only allow that same user
                             if (!empty($record->id_hsse)) {
                                 return (int) $record->id_hsse === (int) $user->id;
@@ -360,13 +312,20 @@ class DocumentResource extends Resource
                             return true;
                         }
 
-                        // S&D can only review if their status is pending or reviewing AND they are the assigned reviewer (if any)
-                        elseif ($user->hasAnyRole(['S&D', 'SND'])) {
-                            if (!in_array($record->snd_status, ['pending', 'reviewing'])) {
+                        // CRM can only review CRM documents
+                        elseif ($user->hasRole('CRM')) {
+                            // Cek apakah dokumen adalah tipe CRM
+                            if ($record->document_type !== 'crm') {
                                 return false;
                             }
-                            if (!empty($record->id_snd)) {
-                                return (int) $record->id_snd === (int) $user->id;
+
+                            // Cek status
+                            if (!in_array($record->crm_status, ['pending', 'reviewing'])) {
+                                return false;
+                            }
+
+                            if (!empty($record->id_crm)) {
+                                return (int) $record->id_crm === (int) $user->id;
                             }
                             return true;
                         }
@@ -396,21 +355,21 @@ class DocumentResource extends Resource
                                 // Jika sudah assigned, tetap update status menjadi reviewing
                                 $updateData['hsse_status'] = 'reviewing';
                             }
-                        } elseif ($user->hasAnyRole(['S&D', 'SND'])) {
-                            if (empty($record->id_snd)) {
-                                $updateData['id_snd'] = $user->id;
-                                $updateData['snd_review_started_at'] = now();
-                                $updateData['snd_status'] = 'reviewing'; // Ubah status menjadi reviewing
-                            } elseif ((int) $record->id_snd !== (int) $user->id) {
+                        } elseif ($user->hasRole('CRM')) {
+                            if (empty($record->id_crm)) {
+                                $updateData['id_crm'] = $user->id;
+                                $updateData['crm_review_started_at'] = now();
+                                $updateData['crm_status'] = 'reviewing'; // Ubah status menjadi reviewing
+                            } elseif ((int) $record->id_crm !== (int) $user->id) {
                                 Notification::make()
                                     ->title('Akses Ditolak')
-                                    ->body('Dokumen ini hanya dapat direview oleh S&D yang sebelumnya ditugaskan.')
+                                    ->body('Dokumen ini hanya dapat direview oleh CRM yang sebelumnya ditugaskan.')
                                     ->danger()
                                     ->send();
                                 return;
                             } else {
                                 // Jika sudah assigned, tetap update status menjadi reviewing
-                                $updateData['snd_status'] = 'reviewing';
+                                $updateData['crm_status'] = 'reviewing';
                             }
                         }
 
@@ -423,10 +382,10 @@ class DocumentResource extends Resource
                                 ->send();
                         }
 
-                        // For HSSE and S&D, open view page in review mode
+                        // For HSSE and CRM, open view page in review mode
                         $url = static::getUrl('view', ['record' => $record]);
 
-                        if ($user->hasRole('HSSE') || $user->hasAnyRole(['S&D', 'SND'])) {
+                        if ($user->hasRole('HSSE') || $user->hasRole('CRM')) {
                             return redirect()->to($url . '?review=1');
                         }
 
@@ -436,6 +395,11 @@ class DocumentResource extends Resource
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make()
+                        ->requiresConfirmation()
+                        ->modalHeading('Hapus Dokumen Terpilih')
+                        ->modalDescription('Apakah Anda yakin ingin menghapus dokumen yang dipilih?')
+                        ->modalSubmitActionLabel('Ya, Hapus')
+                        ->modalCancelActionLabel('Batal')
                         ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
                             $records->each(function ($record) {
                                 if ($record->file) {
@@ -445,7 +409,7 @@ class DocumentResource extends Resource
                             });
 
                             Notification::make()
-                                ->title('Deleted successfully')
+                                ->title('Dokumen berhasil dihapus')
                                 ->success()
                                 ->send();
                         }),
@@ -477,13 +441,23 @@ class DocumentResource extends Resource
             ->withoutGlobalScopes([
                 SoftDeletingScope::class,
             ])
-            ->with(['mitra', 'hsse', 'snd']);
+            ->with(['mitra', 'hsse', 'crm']);
 
         $user = auth()->user();
 
         // Jika user adalah Mitra, hanya tampilkan dokumen yang mereka buat
         if ($user && $user->hasRole('Mitra')) {
             $query->where('id_mitra', $user->id);
+        }
+
+        // Jika user adalah HSSE, hanya tampilkan dokumen tipe HSSE
+        if ($user && $user->hasRole('HSSE')) {
+            $query->where('document_type', 'hsse');
+        }
+
+        // Jika user adalah CRM, hanya tampilkan dokumen tipe CRM
+        if ($user && $user->hasRole('CRM')) {
+            $query->where('document_type', 'crm');
         }
 
         return $query;

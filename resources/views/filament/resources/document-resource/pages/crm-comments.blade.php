@@ -1,7 +1,7 @@
 <div class="space-y-4">
     @if($comments->isEmpty())
         <div class="text-gray-500 text-center py-4">
-            No HSSE comments yet.
+            No CRM comments yet.
         </div>
     @else
         <div class="space-y-3">

@@ -25,61 +25,61 @@ class DocumentStatusPieChart extends ChartWidget
                 $q->where('id_hsse', $user->id)
                     ->orWhere('hsse_status', 'pending');
             });
-        } elseif ($user->hasAnyRole(['S&D', 'SND'])) {
+        } elseif ($user->hasAnyRole(['CRM', 'CRM'])) {
             $query->where(function ($q) use ($user) {
-                $q->where('id_snd', $user->id)
-                    ->orWhere('snd_status', 'pending');
+                $q->where('id_crm', $user->id)
+                    ->orWhere('crm_status', 'pending');
             });
         }
 
         // Pending: logika berbeda berdasarkan role
         if ($user->hasRole('HSSE')) {
             $pendingCount = (clone $query)->where('hsse_status', 'pending')->count();
-        } elseif ($user->hasAnyRole(['S&D', 'SND'])) {
-            $pendingCount = (clone $query)->where('snd_status', 'pending')->count();
+        } elseif ($user->hasAnyRole(['CRM', 'CRM'])) {
+            $pendingCount = (clone $query)->where('crm_status', 'pending')->count();
         } else {
             $pendingCount = (clone $query)->where('hsse_status', 'pending')
-                ->where('snd_status', 'pending')
+                ->where('crm_status', 'pending')
                 ->count();
         }
 
         // Reviewing: logika berbeda berdasarkan role
         if ($user->hasRole('HSSE')) {
             $reviewingCount = (clone $query)->where('hsse_status', 'reviewing')->count();
-        } elseif ($user->hasAnyRole(['S&D', 'SND'])) {
-            $reviewingCount = (clone $query)->where('snd_status', 'reviewing')->count();
+        } elseif ($user->hasAnyRole(['CRM', 'CRM'])) {
+            $reviewingCount = (clone $query)->where('crm_status', 'reviewing')->count();
         } else {
             $reviewingCount = (clone $query)->where(function ($q) {
                 $q->where('hsse_status', 'reviewing')
-                    ->orWhere('snd_status', 'reviewing');
+                    ->orWhere('crm_status', 'reviewing');
             })->count();
         }
 
         $revisiCount = (clone $query)->where(function ($q) {
             $q->where('hsse_status', 'revisi')
-                ->orWhere('snd_status', 'revisi');
+                ->orWhere('crm_status', 'revisi');
         })->count();
 
         // Approved: logika berbeda berdasarkan role
         if ($user->hasRole('HSSE')) {
             $approvedCount = (clone $query)->where('hsse_status', 'approved')->count();
-        } elseif ($user->hasAnyRole(['S&D', 'SND'])) {
-            $approvedCount = (clone $query)->where('snd_status', 'approved')->count();
+        } elseif ($user->hasAnyRole(['CRM', 'CRM'])) {
+            $approvedCount = (clone $query)->where('crm_status', 'approved')->count();
         } else {
             $approvedCount = (clone $query)->where('hsse_status', 'approved')
-                ->where('snd_status', 'approved')
+                ->where('crm_status', 'approved')
                 ->count();
         }
 
         // Rejected: logika berbeda berdasarkan role
         if ($user->hasRole('HSSE')) {
             $rejectedCount = (clone $query)->where('hsse_status', 'rejected')->count();
-        } elseif ($user->hasAnyRole(['S&D', 'SND'])) {
-            $rejectedCount = (clone $query)->where('snd_status', 'rejected')->count();
+        } elseif ($user->hasAnyRole(['CRM', 'CRM'])) {
+            $rejectedCount = (clone $query)->where('crm_status', 'rejected')->count();
         } else {
             $rejectedCount = (clone $query)->where(function ($q) {
                 $q->where('hsse_status', 'rejected')
-                    ->orWhere('snd_status', 'rejected');
+                    ->orWhere('crm_status', 'rejected');
             })->count();
         }
 

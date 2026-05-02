@@ -25,10 +25,10 @@ class DocumentStatusChart extends ChartWidget
                 $q->where('id_hsse', $user->id)
                     ->orWhere('hsse_status', 'pending');
             });
-        } elseif ($user->hasAnyRole(['S&D', 'SND'])) {
+        } elseif ($user->hasAnyRole(['CRM', 'CRM'])) {
             $query->where(function ($q) use ($user) {
-                $q->where('id_snd', $user->id)
-                    ->orWhere('snd_status', 'pending');
+                $q->where('id_crm', $user->id)
+                    ->orWhere('crm_status', 'pending');
             });
         }
 
@@ -38,31 +38,31 @@ class DocumentStatusChart extends ChartWidget
             $reviewingCount = (clone $query)->where('hsse_status', 'reviewing')->count();
             $approvedCount = (clone $query)->where('hsse_status', 'approved')->count();
             $rejectedCount = (clone $query)->where('hsse_status', 'rejected')->count();
-        } elseif ($user->hasAnyRole(['S&D', 'SND'])) {
-            $pendingCount = (clone $query)->where('snd_status', 'pending')->count();
-            $reviewingCount = (clone $query)->where('snd_status', 'reviewing')->count();
-            $approvedCount = (clone $query)->where('snd_status', 'approved')->count();
-            $rejectedCount = (clone $query)->where('snd_status', 'rejected')->count();
+        } elseif ($user->hasAnyRole(['CRM', 'CRM'])) {
+            $pendingCount = (clone $query)->where('crm_status', 'pending')->count();
+            $reviewingCount = (clone $query)->where('crm_status', 'reviewing')->count();
+            $approvedCount = (clone $query)->where('crm_status', 'approved')->count();
+            $rejectedCount = (clone $query)->where('crm_status', 'rejected')->count();
         } else {
             $pendingCount = (clone $query)->where('hsse_status', 'pending')
-                ->where('snd_status', 'pending')
+                ->where('crm_status', 'pending')
                 ->count();
             $reviewingCount = (clone $query)->where(function ($q) {
                 $q->where('hsse_status', 'reviewing')
-                    ->orWhere('snd_status', 'reviewing');
+                    ->orWhere('crm_status', 'reviewing');
             })->count();
             $approvedCount = (clone $query)->where('hsse_status', 'approved')
-                ->where('snd_status', 'approved')
+                ->where('crm_status', 'approved')
                 ->count();
             $rejectedCount = (clone $query)->where(function ($q) {
                 $q->where('hsse_status', 'rejected')
-                    ->orWhere('snd_status', 'rejected');
+                    ->orWhere('crm_status', 'rejected');
             })->count();
         }
 
         $revisiCount = (clone $query)->where(function ($q) {
             $q->where('hsse_status', 'revisi')
-                ->orWhere('snd_status', 'revisi');
+                ->orWhere('crm_status', 'revisi');
         })->count();
 
         return [

@@ -6,9 +6,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class HsseComment extends Model
+class CrmComment extends Model
 {
-    protected $table = 'hsse_comments';
+    protected $table = 'table_crm_comments';
 
     protected $fillable = [
         'document_id',
@@ -25,11 +25,6 @@ class HsseComment extends Model
     public function document(): BelongsTo
     {
         return $this->belongsTo(Document::class, 'document_id');
-    }
-
-    public function hsseComments(): BelongsTo
-    {
-        return $this->belongsTo(HsseComment::class, 'hsse_document_id');
     }
 
     /**

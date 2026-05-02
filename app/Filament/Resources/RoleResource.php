@@ -55,4 +55,11 @@ class RoleResource extends BaseRoleResource
             'edit' => \App\Filament\Resources\RoleResource\Pages\EditRole::route('/{record}/edit'),
         ];
     }
+
+    public static function getRelations(): array
+    {
+        return [
+            // Menghilangkan tab Permissions dan Users
+        ];
+    }
 }

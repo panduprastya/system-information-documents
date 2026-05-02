@@ -17,6 +17,7 @@ class ListDocuments extends ListRecords
     {
         return [
             Actions\CreateAction::make()
+                ->label('Add Dokumen')
                 ->visible(fn() => auth()->user()->hasRole('Mitra')),
         ];
     }
@@ -25,21 +26,21 @@ class ListDocuments extends ListRecords
     {
         $user = auth()->user();
         $isMitra = $user && $user->hasRole('Mitra');
-        
+
         $tabs = [
             'all' => Tab::make(),
             'pending' => Tab::make()
-                ->modifyQueryUsing(fn (Builder $query) => $query->where('hsse_status', 'pending')),
+                ->modifyQueryUsing(fn(Builder $query) => $query->where('hsse_status', 'pending')),
             'reviewing' => Tab::make()
-                ->modifyQueryUsing(fn (Builder $query) => $query->where('status', 'reviewing')),
+                ->modifyQueryUsing(fn(Builder $query) => $query->where('status', 'reviewing')),
             'revisi' => Tab::make()
-                ->modifyQueryUsing(fn (Builder $query) => $query->where('hsse_status', 'revisi')),
+                ->modifyQueryUsing(fn(Builder $query) => $query->where('hsse_status', 'revisi')),
             'approved' => Tab::make()
-                ->modifyQueryUsing(fn (Builder $query) => $query->where('status', 'approved')),
+                ->modifyQueryUsing(fn(Builder $query) => $query->where('status', 'approved')),
             'rejected' => Tab::make()
-                ->modifyQueryUsing(fn (Builder $query) => $query->where('status', 'rejected')),
+                ->modifyQueryUsing(fn(Builder $query) => $query->where('status', 'rejected')),
         ];
-        
+
         // Jika user adalah Mitra, tambahkan filter untuk dokumen mereka sendiri
         if ($isMitra) {
             foreach ($tabs as $tab) {
@@ -48,7 +49,7 @@ class ListDocuments extends ListRecords
                 });
             }
         }
-        
+
         return $tabs;
     }
 }

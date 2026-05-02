@@ -31,7 +31,6 @@ class UserResource extends Resource
                     ->email()
                     ->required()
                     ->maxLength(255),
-                //Forms\Components\DateTimePicker::make('email_verified_at'),
                 Select::make('roles')->multiple()->relationship('roles', 'name')
                     ->preload()
                     ->maxItems(1)
@@ -53,9 +52,6 @@ class UserResource extends Resource
                     ->searchable(),
                 Tables\Columns\TextColumn::make('email')
                     ->searchable(),
-                // Tables\Columns\TextColumn::make('email_verified_at')
-                //     ->dateTime()
-                //     ->sortable(),
                 Tables\Columns\TextColumn::make('roles.name'),
                 Tables\Columns\TextColumn::make('created_at')
                     ->dateTime()
@@ -67,14 +63,24 @@ class UserResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
 
+
             ->actions([
-                //Tables\Actions\ViewAction::make(),
                 Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+                Tables\Actions\DeleteAction::make()
+                    ->requiresConfirmation()
+                    ->modalHeading('Hapus User')
+                    ->modalDescription('Apakah Anda yakin ingin menghapus user ini?')
+                    ->modalSubmitActionLabel('Ya, Hapus')
+                    ->modalCancelActionLabel('Batal'),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                    Tables\Actions\DeleteBulkAction::make()
+                        ->requiresConfirmation()
+                        ->modalHeading('Hapus User Terpilih')
+                        ->modalDescription('Apakah Anda yakin ingin menghapus user yang dipilih?')
+                        ->modalSubmitActionLabel('Ya, Hapus')
+                        ->modalCancelActionLabel('Batal'),
                 ]),
             ]);
     }

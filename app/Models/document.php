@@ -25,20 +25,29 @@ class document extends Model
     protected $fillable = [
         'judul_dokumen',
         'id_mitra',
+        'document_type',
         'file',
         'status',
         'hsse_status',
-        'snd_status',
+        'crm_status',
         'tanggal_upload',
         'tanggal_acc',
         'hsse_review_started_at',
-        'snd_review_started_at',
+        'crm_review_started_at',
         'id_hsse',
-        'id_snd',
+        'id_crm',
         'notes',
         'keterangan',
         'edited_by',
         'last_edited_at',
+    ];
+
+    protected $casts = [
+        'tanggal_upload' => 'datetime',
+        'tanggal_acc' => 'datetime',
+        'hsse_review_started_at' => 'datetime',
+        'crm_review_started_at' => 'datetime',
+        'last_edited_at' => 'datetime',
     ];
 
     /**
@@ -56,9 +65,9 @@ class document extends Model
         return $this->belongsTo(User::class, 'id_hsse', 'id');
     }
 
-    public function snd(): BelongsTo
+    public function crm(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'id_snd', 'id');
+        return $this->belongsTo(User::class, 'id_crm', 'id');
     }
 
     /**
@@ -76,9 +85,9 @@ class document extends Model
         return $this->hasMany(HsseComment::class, 'document_id');
     }
 
-    public function sndComments(): HasMany
+    public function crmComments(): HasMany
     {
-        return $this->hasMany(SndComment::class, 'document_id');
+        return $this->hasMany(CrmComment::class, 'document_id');
     }
 
 
@@ -105,14 +114,14 @@ class document extends Model
     // }
 
     /**
-     * Get S&D comments for the document
+     * Get CRM comments for the document
      *
      * @return \Illuminate\Database\Eloquent\Relations\HasMany
      */
-    //public function sndComments(): HasMany
+    //public function crmComments(): HasMany
     // {
     //     return $this->hasMany(HsseComment::class, 'document_id')
-    //         ->where('reviewer_type', 'snd');
+    //         ->where('reviewer_type', 'crm');
     // }
 
     /**
@@ -126,13 +135,13 @@ class document extends Model
     // }
 
     /**
-     * Check if document has pending S&D review
+     * Check if document has pending CRM review
      *
      * @return bool
      */
-    // public function needsSndReview(): bool
+    // public function needsCrmReview(): bool
     // {
-    //     return $this->snd_status === 'pending' || $this->snd_status === 'reviewing';
+    //     return $this->crm_status === 'pending' || $this->crm_status === 'reviewing';
     // }
 
     /**
@@ -143,7 +152,7 @@ class document extends Model
     // public function allReviewsComplete(): bool
     // {
     //     return $this->hsse_status !== 'pending' && $this->hsse_status !== 'reviewing' &&
-    //            $this->snd_status !== 'pending' && $this->snd_status !== 'reviewing';
+    //            $this->crm_status !== 'pending' && $this->crm_status !== 'reviewing';
     // }
 
     /**
@@ -164,7 +173,7 @@ class document extends Model
      */
     public function canBeEditedByMitra(): bool
     {
-        return $this->hsse_status === 'revisi' || $this->snd_status === 'revisi';
+        return $this->hsse_status === 'revisi' || $this->crm_status === 'revisi';
     }
 
     /**
@@ -174,7 +183,7 @@ class document extends Model
      */
     public function needsRevision(): bool
     {
-        return $this->hsse_status === 'revisi' || $this->snd_status === 'revisi';
+        return $this->hsse_status === 'revisi' || $this->crm_status === 'revisi';
     }
 
     /**
@@ -198,18 +207,50 @@ class document extends Model
             }
         }
 
-        if ($this->snd_status === 'revisi') {
-            $latestSndComment = $this->sndComments()->latest()->first();
-            if ($latestSndComment) {
+        if ($this->crm_status === 'revisi') {
+            $latestCrmComment = $this->crmComments()->latest()->first();
+            if ($latestCrmComment) {
                 $reasons[] = [
-                    'type' => 'S&D',
-                    'comment' => $latestSndComment->komentar ?? 'No comment',
-                    'reviewer' => $latestSndComment->user->name ?? 'Unknown',
-                    'date' => $latestSndComment->created_at
+                    'type' => 'CRM',
+                    'comment' => $latestCrmComment->komentar ?? 'No comment',
+                    'reviewer' => $latestCrmComment->user->name ?? 'Unknown',
+                    'date' => $latestCrmComment->created_at
                 ];
             }
         }
 
         return $reasons;
+    }
+
+    /**
+     * Scope untuk filter dokumen HSSE
+     */
+    public function scopeForHsse($query)
+    {
+        return $query->where('document_type', 'hsse');
+    }
+
+    /**
+     * Scope untuk filter dokumen CRM
+     */
+    public function scopeForCrm($query)
+    {
+        return $query->where('document_type', 'crm');
+    }
+
+    /**
+     * Check if document is for HSSE
+     */
+    public function isForHsse(): bool
+    {
+        return $this->document_type === 'hsse';
+    }
+
+    /**
+     * Check if document is for CRM
+     */
+    public function isForCrm(): bool
+    {
+        return $this->document_type === 'crm';
     }
 }
