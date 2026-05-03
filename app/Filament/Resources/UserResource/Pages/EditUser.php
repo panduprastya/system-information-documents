@@ -26,4 +26,14 @@ class EditUser extends EditRecord
             // Actions\RestoreAction::make(),
         ];
     }
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('index');
+    }
+
+    protected function getSavedNotificationTitle(): ?string
+    {
+        return 'akun pengguna berhasil disimpan';
+    }
 }

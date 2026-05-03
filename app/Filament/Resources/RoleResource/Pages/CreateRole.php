@@ -22,4 +22,15 @@ class CreateRole extends BaseCreateRole
             $this->getCancelFormAction(),
         ];
     }
+
+    protected function getCreateFormAction(): \Filament\Actions\Action
+    {
+        return parent::getCreateFormAction()
+            ->label('Save');
+    }
+
+    protected function getCreatedNotificationTitle(): ?string
+    {
+        return 'role berhasil disimpan';
+    }
 }

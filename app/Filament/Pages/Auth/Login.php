@@ -20,4 +20,10 @@ class Login extends BaseLogin
             'password' => $data['password'],
         ];
     }
+
+    protected function getAuthenticateFormAction(): \Filament\Actions\Action
+    {
+        return parent::getAuthenticateFormAction()
+            ->label('Login');
+    }
 }

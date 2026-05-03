@@ -44,6 +44,16 @@ class RoleResource extends BaseRoleResource
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
+            ])
+            ->actions([
+                Tables\Actions\EditAction::make(),
+                Tables\Actions\DeleteAction::make()
+                    ->requiresConfirmation()
+                    ->modalHeading('Hapus Role')
+                    ->modalDescription('Apakah Anda yakin ingin menghapus role ini?')
+                    ->modalSubmitActionLabel('Ya, Hapus')
+                    ->modalCancelActionLabel('Batal')
+                    ->successNotificationTitle('role berhasil dihapus'),
             ]);
     }
 

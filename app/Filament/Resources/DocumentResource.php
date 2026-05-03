@@ -156,33 +156,7 @@ class DocumentResource extends Resource
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
-            ->filters([
-                Tables\Filters\TrashedFilter::make(),
-                Tables\Filters\SelectFilter::make('document_type')
-                    ->label('Tipe Dokumen')
-                    ->options([
-                        'hsse' => 'HSSE',
-                        'crm' => 'CRM',
-                    ]),
-                Tables\Filters\SelectFilter::make('hsse_status')
-                    ->label('HSSE Status')
-                    ->options([
-                        'pending' => 'Pending',
-                        'reviewing' => 'Reviewing',
-                        'approved' => 'Approved',
-                        'rejected' => 'Rejected',
-                        'revisi' => 'Revisi',
-                    ]),
-                Tables\Filters\SelectFilter::make('crm_status')
-                    ->label('CRM Status')
-                    ->options([
-                        'pending' => 'Pending',
-                        'reviewing' => 'Reviewing',
-                        'approved' => 'Approved',
-                        'rejected' => 'Rejected',
-                        'revisi' => 'Revisi',
-                    ]),
-            ])
+            ->filters([])
             ->actions([
                 Tables\Actions\ViewAction::make(),
                 Tables\Actions\Action::make('download')
@@ -223,68 +197,19 @@ class DocumentResource extends Resource
                             // Untuk dokumen HSSE, hanya cek hsse_status
                             if ($record->document_type === 'hsse') {
                                 $status = $record->hsse_status;
-                                // Bisa edit jika pending, revisi, atau rejected
-                                // Tidak bisa edit jika reviewing atau approved
-                                return in_array($status, ['pending', 'revisi', 'rejected'], true);
+                                // Hanya bisa edit jika status revisi
+                                return $status === 'revisi';
                             }
 
                             // Untuk dokumen CRM, hanya cek crm_status
                             if ($record->document_type === 'crm') {
                                 $status = $record->crm_status;
-                                return in_array($status, ['pending', 'revisi', 'rejected'], true);
+                                return $status === 'revisi';
                             }
                         }
 
                         // HSSE and CRM users cannot edit documents (they can only review)
                         return false;
-                    }),
-                Tables\Actions\DeleteAction::make()
-                    ->visible(function (Document $record) {
-                        $user = auth()->user();
-
-                        // Admin can always delete
-                        if ($user->hasRole('Admin')) {
-                            return true;
-                        }
-
-                        // Mitra can delete ONLY their own documents when status is pending
-                        if ($user->hasRole('Mitra')) {
-                            // Pastikan dokumen milik Mitra yang login
-                            if ($record->id_mitra !== $user->id) {
-                                return false;
-                            }
-
-                            // Untuk dokumen HSSE, button delete hanya muncul jika hsse_status = pending
-                            if ($record->document_type === 'hsse') {
-                                return $record->hsse_status === 'pending';
-                            }
-
-                            // Untuk dokumen CRM, button delete hanya muncul jika crm_status = pending
-                            if ($record->document_type === 'crm') {
-                                return $record->crm_status === 'pending';
-                            }
-
-                            return false;
-                        }
-
-                        // HSSE dan CRM tidak bisa delete dokumen
-                        return false;
-                    })
-                    ->requiresConfirmation()
-                    ->modalHeading('Hapus Dokumen')
-                    ->modalDescription('Apakah Anda yakin ingin menghapus dokumen ini?')
-                    ->modalSubmitActionLabel('Ya, Hapus')
-                    ->modalCancelActionLabel('Batal')
-                    ->action(function (Document $record) {
-                        if ($record->file) {
-                            \Illuminate\Support\Facades\Storage::disk('public')->delete($record->file);
-                        }
-                        $record->forceDelete();
-
-                        Notification::make()
-                            ->title('Dokumen berhasil dihapus')
-                            ->success()
-                            ->send();
                     }),
                 Tables\Actions\Action::make('Review')
                     ->label('Review')
@@ -333,7 +258,6 @@ class DocumentResource extends Resource
                         // Other roles cannot review
                         return false;
                     })
-                    ->requiresConfirmation()
                     ->action(function (Document $record) {
                         $user = auth()->user();
                         $updateData = [];
@@ -392,30 +316,7 @@ class DocumentResource extends Resource
                         return redirect()->to($url);
                     })
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make()
-                        ->requiresConfirmation()
-                        ->modalHeading('Hapus Dokumen Terpilih')
-                        ->modalDescription('Apakah Anda yakin ingin menghapus dokumen yang dipilih?')
-                        ->modalSubmitActionLabel('Ya, Hapus')
-                        ->modalCancelActionLabel('Batal')
-                        ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
-                            $records->each(function ($record) {
-                                if ($record->file) {
-                                    \Illuminate\Support\Facades\Storage::disk('public')->delete($record->file);
-                                }
-                                $record->forceDelete();
-                            });
-
-                            Notification::make()
-                                ->title('Dokumen berhasil dihapus')
-                                ->success()
-                                ->send();
-                        }),
-                ])
-                    ->visible(fn() => auth()->user()->hasRole('Admin')), //supaya bulk action deletes dapat diakses oleh admin saja
-            ]);
+            ->bulkActions([]);
     }
 
     public static function getRelations(): array

@@ -16,4 +16,23 @@ class CreateUser extends CreateRecord
     {
         return $this->getResource()::getUrl('index');
     }
+
+    protected function getCreateFormAction(): Actions\Action
+    {
+        return parent::getCreateFormAction()
+            ->label('Save');
+    }
+
+    protected function getValidationFailureNotification(): \Filament\Notifications\Notification
+    {
+        return \Filament\Notifications\Notification::make()
+            ->title('Gagal Menyimpan')
+            ->body('Ada kolom yang masih kosong atau tidak valid, silakan periksa kembali.')
+            ->danger();
+    }
+
+    protected function getCreatedNotificationTitle(): ?string
+    {
+        return 'akun pengguna berhasil disimpan';
+    }
 }

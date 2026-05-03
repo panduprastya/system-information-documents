@@ -133,12 +133,7 @@ class EditDocument extends EditRecord
         if ($user && $user->hasRole('HSSE')) {
             return [
                 \Filament\Actions\Action::make('save')
-                    ->label('Simpan Komentar')
-                    ->requiresConfirmation()
-                    ->modalHeading('Konfirmasi Simpan Komentar')
-                    ->modalDescription('Apakah Anda yakin dengan komentar yang diberikan?')
-                    ->modalSubmitActionLabel('Ya, Simpan')
-                    ->modalCancelActionLabel('Batal')
+                    ->label('Kirim Komentar')
                     ->color('primary')
                     ->action(function () {
                         $this->save();
@@ -156,12 +151,7 @@ class EditDocument extends EditRecord
         if ($user && $user->hasRole('CRM')) {
             return [
                 \Filament\Actions\Action::make('save')
-                    ->label('Simpan Komentar')
-                    ->requiresConfirmation()
-                    ->modalHeading('Konfirmasi Simpan Komentar')
-                    ->modalDescription('Apakah Anda yakin dengan komentar yang diberikan?')
-                    ->modalSubmitActionLabel('Ya, Simpan')
-                    ->modalCancelActionLabel('Batal')
+                    ->label('Kirim Komentar')
                     ->color('primary')
                     ->action(function () {
                         $this->save();

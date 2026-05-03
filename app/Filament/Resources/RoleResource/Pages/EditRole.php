@@ -11,9 +11,7 @@ class EditRole extends BaseEditRole
 
     public function getHeaderActions(): array
     {
-        return [
-            Actions\DeleteAction::make(),
-        ];
+        return [];
     }
 
     protected function getRedirectUrl(): string

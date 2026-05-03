@@ -36,13 +36,13 @@ class AdminPanelProvider extends PanelProvider
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
             ->pages([
-                Pages\Dashboard::class,
+                // Pages\Dashboard::class,
             ])
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
             ->widgets([
-                \App\Filament\Widgets\DocumentStatsOverview::class,
-                \App\Filament\Widgets\DocumentStatusChart::class,
-                \App\Filament\Widgets\DocumentStatusPieChart::class,
+                // \App\Filament\Widgets\DocumentStatsOverview::class,
+                // \App\Filament\Widgets\DocumentStatusChart::class,
+                // \App\Filament\Widgets\DocumentStatusPieChart::class,
             ])
             ->middleware([
                 EncryptCookies::class,

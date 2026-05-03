@@ -26,19 +26,33 @@ class UserResource extends Resource
             ->schema([
                 Forms\Components\TextInput::make('name')
                     ->required()
+                    ->validationMessages([
+                        'required' => 'Kolom nama wajib diisi.',
+                    ])
                     ->maxLength(255),
                 Forms\Components\TextInput::make('email')
                     ->email()
                     ->required()
+                    ->validationMessages([
+                        'required' => 'Kolom email wajib diisi.',
+                        'email' => 'Format email tidak valid.',
+                    ])
                     ->maxLength(255),
                 Select::make('roles')->multiple()->relationship('roles', 'name')
                     ->preload()
                     ->maxItems(1)
-                    ->required(),
-                Forms\Components\TextInput::make('password')
-                    ->visibleOn('create')
-                    ->password()
                     ->required()
+                    ->validationMessages([
+                        'required' => 'Kolom role wajib dipilih.',
+                    ]),
+                Forms\Components\TextInput::make('password')
+                    ->password()
+                    ->dehydrated(fn (?string $state) => filled($state))
+                    ->required(fn (string $context): bool => $context === 'create')
+                    ->helperText('Biarkan kosong jika tidak ingin mengubah password.')
+                    ->validationMessages([
+                        'required' => 'Kolom password wajib diisi.',
+                    ])
                     ->maxLength(255),
             ])
             ->columns(1);
@@ -71,7 +85,8 @@ class UserResource extends Resource
                     ->modalHeading('Hapus User')
                     ->modalDescription('Apakah Anda yakin ingin menghapus user ini?')
                     ->modalSubmitActionLabel('Ya, Hapus')
-                    ->modalCancelActionLabel('Batal'),
+                    ->modalCancelActionLabel('Batal')
+                    ->successNotificationTitle('akun pengguna berhasil dihapus'),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
