@@ -49,7 +49,10 @@ class UserResource extends Resource
                     ->password()
                     ->dehydrated(fn (?string $state) => filled($state))
                     ->required(fn (string $context): bool => $context === 'create')
-                    ->helperText('Biarkan kosong jika tidak ingin mengubah password.')
+                    ->helperText(fn (string $context) => $context === 'edit'
+                        ? new \Illuminate\Support\HtmlString('<span style="color: #dc2626; font-weight: 500;">Biarkan kosong jika tidak ingin mengubah password.</span>')
+                        : null
+                    )
                     ->validationMessages([
                         'required' => 'Kolom password wajib diisi.',
                     ])

@@ -36,4 +36,10 @@ class EditUser extends EditRecord
     {
         return 'akun pengguna berhasil disimpan';
     }
+
+    protected function getSaveFormAction(): \Filament\Actions\Action
+    {
+        return parent::getSaveFormAction()
+            ->label('Save');
+    }
 }

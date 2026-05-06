@@ -8,6 +8,15 @@ use Filament\Tables\Table;
 
 class RoleResource extends BaseRoleResource
 {
+    protected static ?string $navigationGroup = null;
+
+    protected static ?int $navigationSort = 3;
+
+    public static function getNavigationGroup(): ?string
+    {
+        return null;
+    }
+
     public static function table(Table $table): Table
     {
         return parent::table($table)
