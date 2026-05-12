@@ -3,6 +3,7 @@
 namespace App\Filament\Widgets;
 
 use App\Models\Document;
+use Illuminate\Support\Facades\Cache;
 use Filament\Widgets\ChartWidget;
 
 class DocumentStatusChart extends ChartWidget
@@ -11,65 +12,65 @@ class DocumentStatusChart extends ChartWidget
 
     protected static ?int $sort = 2;
 
+    // Poll setiap 60 detik
+    protected static ?string $pollingInterval = '60s';
+
     protected function getData(): array
     {
-        $user = auth()->user();
+        $user   = auth()->user();
+        $userId = $user->id;
 
-        // Base query berdasarkan role
-        $query = Document::query();
+        $cacheKey = "doc_chart_bar_{$userId}";
 
-        if ($user->hasRole('Mitra')) {
-            $query->where('id_mitra', $user->id);
-        } elseif ($user->hasRole('HSSE')) {
-            $query->where(function ($q) use ($user) {
-                $q->where('id_hsse', $user->id)
-                    ->orWhere('hsse_status', 'pending');
-            });
-        } elseif ($user->hasAnyRole(['CRM', 'CRM'])) {
-            $query->where(function ($q) use ($user) {
-                $q->where('id_crm', $user->id)
-                    ->orWhere('crm_status', 'pending');
-            });
-        }
+        $counts = Cache::remember($cacheKey, 120, function () use ($user, $userId) {
+            $query = Document::query();
 
-        // Pending: logika berbeda berdasarkan role
-        if ($user->hasRole('HSSE')) {
-            $pendingCount = (clone $query)->where('hsse_status', 'pending')->count();
-            $reviewingCount = (clone $query)->where('hsse_status', 'reviewing')->count();
-            $approvedCount = (clone $query)->where('hsse_status', 'approved')->count();
-            $rejectedCount = (clone $query)->where('hsse_status', 'rejected')->count();
-        } elseif ($user->hasAnyRole(['CRM', 'CRM'])) {
-            $pendingCount = (clone $query)->where('crm_status', 'pending')->count();
-            $reviewingCount = (clone $query)->where('crm_status', 'reviewing')->count();
-            $approvedCount = (clone $query)->where('crm_status', 'approved')->count();
-            $rejectedCount = (clone $query)->where('crm_status', 'rejected')->count();
-        } else {
-            $pendingCount = (clone $query)->where('hsse_status', 'pending')
-                ->where('crm_status', 'pending')
-                ->count();
-            $reviewingCount = (clone $query)->where(function ($q) {
-                $q->where('hsse_status', 'reviewing')
-                    ->orWhere('crm_status', 'reviewing');
-            })->count();
-            $approvedCount = (clone $query)->where('hsse_status', 'approved')
-                ->where('crm_status', 'approved')
-                ->count();
-            $rejectedCount = (clone $query)->where(function ($q) {
-                $q->where('hsse_status', 'rejected')
-                    ->orWhere('crm_status', 'rejected');
-            })->count();
-        }
+            if ($user->hasRole('Mitra')) {
+                $query->where('id_mitra', $userId);
+            } elseif ($user->hasRole('HSSE')) {
+                $query->where('document_type', 'hsse')
+                      ->where(function ($q) use ($userId) {
+                          $q->where('id_hsse', $userId)->orWhere('hsse_status', 'pending');
+                      });
+            } elseif ($user->hasRole('CRM')) {
+                $query->where('document_type', 'crm')
+                      ->where(function ($q) use ($userId) {
+                          $q->where('id_crm', $userId)->orWhere('crm_status', 'pending');
+                      });
+            }
 
-        $revisiCount = (clone $query)->where(function ($q) {
-            $q->where('hsse_status', 'revisi')
-                ->orWhere('crm_status', 'revisi');
-        })->count();
+            // Satu GROUP BY query — database yang menghitung, bukan PHP loop
+            $statusField = match (true) {
+                $user->hasRole('HSSE') => 'hsse_status',
+                $user->hasRole('CRM')  => 'crm_status',
+                default                => "IF(document_type = 'hsse', hsse_status, crm_status)",
+            };
+
+            $rows = $query
+                ->selectRaw("({$statusField}) as status_val, COUNT(*) as cnt")
+                ->groupByRaw("({$statusField})")
+                ->pluck('cnt', 'status_val');
+
+            return [
+                'pending'   => (int) ($rows['pending']   ?? 0),
+                'reviewing' => (int) ($rows['reviewing'] ?? 0),
+                'revisi'    => (int) ($rows['revisi']    ?? 0),
+                'approved'  => (int) ($rows['approved']  ?? 0),
+                'rejected'  => (int) ($rows['rejected']  ?? 0),
+            ];
+        });
 
         return [
             'datasets' => [
                 [
-                    'label' => 'Jumlah Dokumen',
-                    'data' => [$pendingCount, $reviewingCount, $revisiCount, $approvedCount, $rejectedCount],
+                    'label'           => 'Jumlah Dokumen',
+                    'data'            => [
+                        $counts['pending'],
+                        $counts['reviewing'],
+                        $counts['revisi'],
+                        $counts['approved'],
+                        $counts['rejected'],
+                    ],
                     'backgroundColor' => [
                         'rgba(156, 163, 175, 0.8)', // Gray - Pending
                         'rgba(251, 191, 36, 0.8)',  // Amber - Reviewing
@@ -77,14 +78,14 @@ class DocumentStatusChart extends ChartWidget
                         'rgba(34, 197, 94, 0.8)',   // Green - Approved
                         'rgba(239, 68, 68, 0.8)',   // Red - Rejected
                     ],
-                    'borderColor' => [
+                    'borderColor'     => [
                         'rgb(156, 163, 175)',
                         'rgb(251, 191, 36)',
                         'rgb(59, 130, 246)',
                         'rgb(34, 197, 94)',
                         'rgb(239, 68, 68)',
                     ],
-                    'borderWidth' => 2,
+                    'borderWidth'     => 2,
                 ],
             ],
             'labels' => ['Pending', 'Dalam Review', 'Revisi', 'Approved', 'Rejected'],
@@ -100,16 +101,12 @@ class DocumentStatusChart extends ChartWidget
     {
         return [
             'plugins' => [
-                'legend' => [
-                    'display' => true,
-                ],
+                'legend' => ['display' => true],
             ],
-            'scales' => [
+            'scales'  => [
                 'y' => [
                     'beginAtZero' => true,
-                    'ticks' => [
-                        'stepSize' => 1,
-                    ],
+                    'ticks'       => ['stepSize' => 1],
                 ],
             ],
         ];

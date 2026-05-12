@@ -249,32 +249,7 @@ class EditDocument extends EditRecord
                                     ->columnSpanFull()
                                     ->visible(auth()->user()->hasRole('Mitra')),
 
-                                // Placeholder::make('revision_info')
-                                //     ->label('Alasan Revisi')
-                                //     ->content(function ($record) {
-                                //         if (!$record || !$record->needsRevision()) {
-                                //             return 'Dokumen ini tidak memerlukan revisi.';
-                                //         }
 
-                                //         $reasons = $record->getRevisionReasons();
-                                //         if (empty($reasons)) {
-                                //             return 'Tidak ada alasan revisi yang tersedia.';
-                                //         }
-
-                                //         $html = '<div class="space-y-2">';
-                                //         foreach ($reasons as $reason) {
-                                //             $html .= '<div class="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">';
-                                //             $html .= '<div class="font-semibold text-yellow-800">' . $reason['type'] . ' Review</div>';
-                                //             $html .= '<div class="text-sm text-yellow-700 mt-1">' . nl2br(e($reason['comment'])) . '</div>';
-                                //             $html .= '<div class="text-xs text-yellow-600 mt-2">Reviewer: ' . e($reason['reviewer']) . ' | ' . $reason['date']->format('d/m/Y H:i') . '</div>';
-                                //             $html .= '</div>';
-                                //         }
-                                //         $html .= '</div>';
-
-                                //         return new \Illuminate\Support\HtmlString($html);
-                                //     })
-                                //     ->columnSpanFull()
-                                //     ->visible(auth()->user()->hasRole('Mitra')),
                             ])
                             ->columnSpan(['lg' => 2])
                             ->visible(auth()->user()->hasRole('Mitra')),

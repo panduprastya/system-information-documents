@@ -91,8 +91,7 @@ class DocumentResource extends Resource
                         default => strtoupper($state),
                     })
                     ->sortable(),
-                // Tables\Columns\TextColumn::make('file')
-                //     ->searchable(),
+
                 Tables\Columns\TextColumn::make('keterangan')
                     ->label('Keterangan Dokumen')
                     ->limit(60)
@@ -342,7 +341,23 @@ class DocumentResource extends Resource
             ->withoutGlobalScopes([
                 SoftDeletingScope::class,
             ])
-            ->with(['mitra', 'hsse', 'crm']);
+            // Hanya ambil kolom yang dibutuhkan tabel list — jangan fetch 'file' (path PDF)
+            ->select([
+                'documents.id',
+                'documents.judul_dokumen',
+                'documents.document_type',
+                'documents.keterangan',
+                'documents.hsse_status',
+                'documents.crm_status',
+                'documents.id_mitra',
+                'documents.id_hsse',
+                'documents.id_crm',
+                'documents.created_at',
+                'documents.updated_at',
+                'documents.deleted_at',
+                'documents.file',
+            ])
+            ->with(['mitra:id,name', 'hsse:id,name', 'crm:id,name']);
 
         $user = auth()->user();
 

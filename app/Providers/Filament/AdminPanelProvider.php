@@ -38,7 +38,8 @@ class AdminPanelProvider extends PanelProvider
             ->pages([
                 // Pages\Dashboard::class,
             ])
-            ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
+            // Widget discovery dinonaktifkan sementara — dashboard belum digunakan
+            // ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
             ->widgets([
                 // \App\Filament\Widgets\DocumentStatsOverview::class,
                 // \App\Filament\Widgets\DocumentStatusChart::class,

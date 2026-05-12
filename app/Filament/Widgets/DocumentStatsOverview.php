@@ -3,6 +3,7 @@
 namespace App\Filament\Widgets;
 
 use App\Models\Document;
+use Illuminate\Support\Facades\Cache;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 
@@ -10,136 +11,96 @@ class DocumentStatsOverview extends BaseWidget
 {
     protected static ?int $sort = 1;
 
+    // Poll setiap 60 detik (bukan real-time agar tidak boros query)
+    protected static ?string $pollingInterval = '60s';
+
     protected function getStats(): array
     {
-        $user = auth()->user();
+        $user   = auth()->user();
+        $userId = $user->id;
 
-        // Base query berdasarkan role
-        $query = Document::query();
+        // Cache key unik per user agar data tidak tercampur antar role
+        $cacheKey = "doc_stats_overview_{$userId}";
 
-        if ($user->hasRole('Mitra')) {
-            // Mitra hanya melihat dokumen mereka sendiri
-            $query->where('id_mitra', $user->id);
-        } elseif ($user->hasRole('HSSE')) {
-            // HSSE melihat dokumen yang assigned ke mereka atau pending HSSE review
-            $query->where(function ($q) use ($user) {
-                $q->where('id_hsse', $user->id)
-                    ->orWhere('hsse_status', 'pending');
-            });
-        } elseif ($user->hasRole('CRM')) {
-            // CRM melihat dokumen yang assigned ke mereka atau pending CRM review
-            $query->where(function ($q) use ($user) {
-                $q->where('id_crm', $user->id)
-                    ->orWhere('crm_status', 'pending');
-            });
-        }
-        // Admin melihat semua dokumen (tidak ada filter tambahan)
+        $counts = Cache::remember($cacheKey, 120, function () use ($user, $userId) {
+            // ===== BASE QUERY sesuai role =====
+            $query = Document::query();
 
-        // Hitung dokumen berdasarkan status
-        $totalDocuments = (clone $query)->count();
+            if ($user->hasRole('Mitra')) {
+                $query->where('id_mitra', $userId);
+            } elseif ($user->hasRole('HSSE')) {
+                $query->where('document_type', 'hsse')
+                      ->where(function ($q) use ($userId) {
+                          $q->where('id_hsse', $userId)
+                            ->orWhere('hsse_status', 'pending');
+                      });
+            } elseif ($user->hasRole('CRM')) {
+                $query->where('document_type', 'crm')
+                      ->where(function ($q) use ($userId) {
+                          $q->where('id_crm', $userId)
+                            ->orWhere('crm_status', 'pending');
+                      });
+            }
+            // Admin: tidak ada filter, lihat semua
 
-        // Pending: logika berbeda berdasarkan role
-        if ($user->hasRole('HSSE')) {
-            // HSSE melihat dokumen dengan hsse_status = pending
-            $pendingCount = (clone $query)->where('hsse_status', 'pending')->count();
-        } elseif ($user->hasRole('CRM')) {
-            // CRM melihat dokumen dengan crm_status = pending
-            $pendingCount = (clone $query)->where('crm_status', 'pending')->count();
-        } else {
-            // Admin dan Mitra melihat dokumen dengan kedua status pending
-            $pendingCount = (clone $query)->where('hsse_status', 'pending')
-                ->where('crm_status', 'pending')
-                ->count();
-        }
+            // ===== Gunakan 1 GROUP BY query — DB yang hitung, bukan PHP =====
+            $statusField = match (true) {
+                $user->hasRole('HSSE') => 'hsse_status',
+                $user->hasRole('CRM')  => 'crm_status',
+                default                => "IF(document_type = 'hsse', hsse_status, crm_status)",
+            };
 
-        // Reviewing: logika berbeda berdasarkan role
-        if ($user->hasRole('HSSE')) {
-            // HSSE melihat dokumen yang sedang mereka review
-            $reviewingCount = (clone $query)->where('hsse_status', 'reviewing')->count();
-        } elseif ($user->hasRole('CRM')) {
-            // CRM melihat dokumen yang sedang mereka review
-            $reviewingCount = (clone $query)->where('crm_status', 'reviewing')->count();
-        } else {
-            // Admin dan Mitra melihat dokumen yang sedang di-review (salah satu atau kedua)
-            $reviewingCount = (clone $query)->where(function ($q) {
-                $q->where('hsse_status', 'reviewing')
-                    ->orWhere('crm_status', 'reviewing');
-            })->count();
-        }
+            $rows = (clone $query)
+                ->selectRaw("({$statusField}) as status_val, COUNT(*) as cnt")
+                ->groupByRaw("({$statusField})")
+                ->pluck('cnt', 'status_val');
 
-        // Revisi: salah satu atau kedua status revisi
-        $revisiCount = (clone $query)->where(function ($q) {
-            $q->where('hsse_status', 'revisi')
-                ->orWhere('crm_status', 'revisi');
-        })->count();
+            $total     = $rows->sum();
+            $pending   = (int) ($rows['pending']   ?? 0);
+            $reviewing = (int) ($rows['reviewing'] ?? 0);
+            $revisi    = (int) ($rows['revisi']    ?? 0);
+            $approved  = (int) ($rows['approved']  ?? 0);
+            $rejected  = (int) ($rows['rejected']  ?? 0);
 
-
-        // Approved: logika berbeda berdasarkan role
-        if ($user->hasRole('HSSE')) {
-            // HSSE melihat dokumen yang mereka sudah approve
-            $approvedCount = (clone $query)->where('hsse_status', 'approved')->count();
-        } elseif ($user->hasRole('CRM')) {
-            // CRM melihat dokumen yang mereka sudah approve
-            $approvedCount = (clone $query)->where('crm_status', 'approved')->count();
-        } else {
-            // Admin dan Mitra melihat dokumen yang fully approved (kedua status approved)
-            $approvedCount = (clone $query)->where('hsse_status', 'approved')
-                ->where('crm_status', 'approved')
-                ->count();
-        }
-
-        // Rejected: logika berbeda berdasarkan role
-        if ($user->hasRole('HSSE')) {
-            // HSSE melihat dokumen yang mereka reject
-            $rejectedCount = (clone $query)->where('hsse_status', 'rejected')->count();
-        } elseif ($user->hasRole('CRM')) {
-            // CRM melihat dokumen yang mereka reject
-            $rejectedCount = (clone $query)->where('crm_status', 'rejected')->count();
-        } else {
-            // Admin dan Mitra melihat dokumen yang di-reject (salah satu atau kedua)
-            $rejectedCount = (clone $query)->where(function ($q) {
-                $q->where('hsse_status', 'rejected')
-                    ->orWhere('crm_status', 'rejected');
-            })->count();
-        }
-
+            return compact('total', 'pending', 'reviewing', 'revisi', 'approved', 'rejected');
+        });
 
         return [
-            Stat::make('Total Dokumen', $totalDocuments)
+            Stat::make('Total Dokumen', $counts['total'])
                 ->description('Total semua dokumen')
                 ->descriptionIcon('heroicon-m-document-text')
                 ->color('primary')
                 ->chart([7, 3, 4, 5, 6, 3, 5, 3]),
 
-            Stat::make('Pending', $pendingCount)
+            Stat::make('Pending', $counts['pending'])
                 ->description($user->hasRole('HSSE') ? 'Pending HSSE' : ($user->hasRole('CRM') ? 'Pending CRM' : 'Menunggu review'))
                 ->descriptionIcon('heroicon-m-clock')
                 ->color('gray')
-                ->chart(array_fill(0, 7, $pendingCount)),
+                ->chart(array_fill(0, 7, max(1, $counts['pending']))),
 
-            Stat::make('Dalam Review', $reviewingCount)
+            Stat::make('Dalam Review', $counts['reviewing'])
                 ->description($user->hasRole('HSSE') ? 'Reviewing HSSE' : ($user->hasRole('CRM') ? 'Reviewing CRM' : 'Sedang direview'))
                 ->descriptionIcon('heroicon-m-eye')
                 ->color('warning')
-                ->chart(array_fill(0, 7, $reviewingCount)),
+                ->chart(array_fill(0, 7, max(1, $counts['reviewing']))),
 
-            Stat::make('Revisi', $revisiCount)
+            Stat::make('Revisi', $counts['revisi'])
                 ->description('Perlu perbaikan')
                 ->descriptionIcon('heroicon-m-arrow-path')
                 ->color('info')
-                ->chart(array_fill(0, 7, $revisiCount)),
+                ->chart(array_fill(0, 7, max(1, $counts['revisi']))),
 
-            Stat::make('Approved', $approvedCount)
+            Stat::make('Approved', $counts['approved'])
                 ->description($user->hasRole('HSSE') ? 'Disetujui HSSE' : ($user->hasRole('CRM') ? 'Disetujui CRM' : 'Fully Approved'))
                 ->descriptionIcon('heroicon-m-check-circle')
                 ->color('success')
-                ->chart(array_fill(0, 7, $approvedCount)),
+                ->chart(array_fill(0, 7, max(1, $counts['approved']))),
 
-            Stat::make('Rejected', $rejectedCount)
+            Stat::make('Rejected', $counts['rejected'])
                 ->description($user->hasRole('HSSE') ? 'Ditolak HSSE' : ($user->hasRole('CRM') ? 'Ditolak CRM' : 'Ditolak'))
                 ->descriptionIcon('heroicon-m-x-circle')
                 ->color('danger')
-                ->chart(array_fill(0, 7, $rejectedCount)),
+                ->chart(array_fill(0, 7, max(1, $counts['rejected']))),
         ];
     }
 }

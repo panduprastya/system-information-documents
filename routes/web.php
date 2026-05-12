@@ -2,8 +2,6 @@
 
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
-use App\Http\Controllers\CrmCommentController;
-use App\Http\Controllers\HsseCommentController;
 use App\Http\Controllers\DocumentDownloadController;
 
 
@@ -42,30 +40,8 @@ Route::get('/pdf/viewer/{file}', function ($file) {
 
 // Protected routes for authenticated users
 Route::middleware(['auth'])->group(function () {
-    // CRM Comments Routes
-    Route::post('/documents/{document}/crm-comments', [CrmCommentController::class, 'store'])->name('crm-comments.store');
-    Route::get('/documents/{document}/crm-comments', [CrmCommentController::class, 'index'])->name('crm-comments.index');
-    Route::put('/crm-comments/{comment}', [CrmCommentController::class, 'update'])->name('crm-comments.update');
-    Route::put('/crm-comments/{comment}/resolve', [CrmCommentController::class, 'resolve'])->name('crm-comments.resolve');
-    Route::delete('/crm-comments/{comment}', [CrmCommentController::class, 'destroy'])->name('crm-comments.destroy');
-
-    // HSSE Comments Routes
-    Route::post('/documents/{document}/hsse-comments', [HsseCommentController::class, 'store'])->name('hsse-comments.store');
-    Route::get('/documents/{document}/hsse-comments', [HsseCommentController::class, 'index'])->name('hsse-comments.index');
-    Route::put('/hsse-comments/{comment}', [HsseCommentController::class, 'update'])->name('hsse-comments.update');
-    Route::put('/hsse-comments/{comment}/resolve', [HsseCommentController::class, 'resolve'])->name('hsse-comments.resolve');
-    Route::delete('/hsse-comments/{comment}', [HsseCommentController::class, 'destroy'])->name('hsse-comments.destroy');
-
     // Document download with approval cover page (only if hsse_status & crm_status are approved)
     Route::get('/documents/{document}/download', [DocumentDownloadController::class, 'download'])->name('documents.download');
-
-
-    // Document Approval Route
-    Route::get('/documents/{document}/approve', [\App\Http\Controllers\DocumentApprovalController::class, 'approve'])->name('documents.approve');
-
-    // Document Rejection Routes
-    Route::get('/documents/{document}/reject', [\App\Http\Controllers\DocumentApprovalController::class, 'showRejectForm'])->name('documents.reject.form');
-    Route::post('/documents/{document}/reject', [\App\Http\Controllers\DocumentApprovalController::class, 'reject'])->name('documents.reject');
 });
 
 // Public route for document verification via QR code
