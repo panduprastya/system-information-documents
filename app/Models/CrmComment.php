@@ -8,13 +8,17 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class CrmComment extends Model
 {
-    protected $table = 'table_crm_comments';
+    protected $table = 'crm_comment';
+    protected $primaryKey = 'id_crm_comment';
+    public $incrementing = false;
+    protected $keyType = 'string';
+    const UPDATED_AT = null;
 
     protected $fillable = [
-        'document_id',
-        'user_id',
+        'id_crm_comment',
+        'id_document',
+        'id_user',
         'komentar',
-        'status_after',
     ];
 
     /**
@@ -24,7 +28,7 @@ class CrmComment extends Model
      */
     public function document(): BelongsTo
     {
-        return $this->belongsTo(Document::class, 'document_id');
+        return $this->belongsTo(Document::class, 'id_document', 'id_document');
     }
 
     /**
@@ -34,6 +38,6 @@ class CrmComment extends Model
      */
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'user_id');
+        return $this->belongsTo(User::class, 'id_user', 'id_user');
     }
 }

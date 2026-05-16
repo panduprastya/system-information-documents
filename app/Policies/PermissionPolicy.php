@@ -4,7 +4,7 @@ namespace App\Policies;
 
 use App\Models\User;
 use Illuminate\Auth\Access\Response;
-use Althinect\FilamentSpatieRolesPermissions\Commands\Permission;
+use Spatie\Permission\Models\Permission;
 
 class PermissionPolicy
 {

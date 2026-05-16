@@ -10,7 +10,6 @@
         "althinect/filament-spatie-roles-permissions": "^2.3",
         "barryvdh/laravel-dompdf": "^3.1",
         "filament/filament": "3.3",
-        "iio/libmergepdf": "^3.1",
         "jurosh/pdf-merge": "^2.1",
         "laravel/framework": "^12.0",
         "laravel/tinker": "^2.10.1",

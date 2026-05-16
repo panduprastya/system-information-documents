@@ -2,10 +2,10 @@
 
 namespace App\Filament\Resources\RoleResource\Pages;
 
-use Althinect\FilamentSpatieRolesPermissions\Resources\RoleResource\Pages\EditRole as BaseEditRole;
 use Filament\Actions;
+use Filament\Resources\Pages\EditRecord;
 
-class EditRole extends BaseEditRole
+class EditRole extends EditRecord
 {
     protected static string $resource = \App\Filament\Resources\RoleResource::class;
 

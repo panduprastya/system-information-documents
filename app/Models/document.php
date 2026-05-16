@@ -5,7 +5,6 @@ namespace App\Models;
 use App\Observers\DocumentObserver;
 use App\Scopes\MitraDocumentScope;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -15,7 +14,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 #[ObservedBy(DocumentObserver::class)]
 class document extends Model
 {
-    use SoftDeletes;
+    protected $table = 'document';
+    protected $primaryKey = 'id_document';
+    public $incrementing = false;
+    protected $keyType = 'string';
+    public $timestamps = false;
 
     protected static function booted()
     {
@@ -23,31 +26,18 @@ class document extends Model
     }
 
     protected $fillable = [
+        'id_user',
         'judul_dokumen',
-        'id_mitra',
-        'document_type',
+        'tipe_dokumen',
         'file',
-        'status',
+        'keterangan',
         'hsse_status',
         'crm_status',
         'tanggal_upload',
-        'tanggal_acc',
-        'hsse_review_started_at',
-        'crm_review_started_at',
-        'id_hsse',
-        'id_crm',
-        'notes',
-        'keterangan',
-        'edited_by',
-        'last_edited_at',
     ];
 
     protected $casts = [
         'tanggal_upload' => 'datetime',
-        'tanggal_acc' => 'datetime',
-        'hsse_review_started_at' => 'datetime',
-        'crm_review_started_at' => 'datetime',
-        'last_edited_at' => 'datetime',
     ];
 
     /**
@@ -57,17 +47,7 @@ class document extends Model
      */
     public function mitra(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'id_mitra', 'id');
-    }
-
-    public function hsse(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'id_hsse', 'id');
-    }
-
-    public function crm(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'id_crm', 'id');
+        return $this->belongsTo(User::class, 'id_user', 'id_user');
     }
 
     /**
@@ -82,12 +62,12 @@ class document extends Model
 
     public function hsseComments(): HasMany
     {
-        return $this->hasMany(HsseComment::class, 'document_id');
+        return $this->hasMany(HsseComment::class, 'id_document', 'id_document');
     }
 
     public function crmComments(): HasMany
     {
-        return $this->hasMany(CrmComment::class, 'document_id');
+        return $this->hasMany(CrmComment::class, 'id_document', 'id_document');
     }
 
 
@@ -154,7 +134,7 @@ class document extends Model
      */
     public function scopeForHsse($query)
     {
-        return $query->where('document_type', 'hsse');
+        return $query->where('tipe_dokumen', 'hsse');
     }
 
     /**
@@ -162,7 +142,7 @@ class document extends Model
      */
     public function scopeForCrm($query)
     {
-        return $query->where('document_type', 'crm');
+        return $query->where('tipe_dokumen', 'crm');
     }
 
     /**
@@ -170,7 +150,7 @@ class document extends Model
      */
     public function isForHsse(): bool
     {
-        return $this->document_type === 'hsse';
+        return $this->tipe_dokumen === 'hsse';
     }
 
     /**
@@ -178,6 +158,7 @@ class document extends Model
      */
     public function isForCrm(): bool
     {
-        return $this->document_type === 'crm';
+        return $this->tipe_dokumen === 'crm';
     }
 }
+

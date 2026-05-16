@@ -15,9 +15,9 @@ class CreateDocument extends CreateRecord
     {
         $user = auth()->user();
 
-        // Jika user adalah Mitra, otomatis isi id_mitra
+        // Jika user adalah Mitra, otomatis isi id_user
         if ($user && $user->hasRole('Mitra')) {
-            $data['id_mitra'] = $user->id;
+            $data['id_user'] = $user->id_user;
         }
 
         return $data;

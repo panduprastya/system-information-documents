@@ -15,10 +15,11 @@ class MitraDocumentScope implements Scope
 
         // Jika user adalah Mitra, hanya tampilkan dokumen yang mereka buat
         if ($user && $user->hasRole('Mitra')) {
-            $builder->where('id_mitra', $user->id);
+            $builder->where('id_user', $user->id_user);
         }
 
         // Admin, HSSE, dan CRM dapat melihat semua dokumen
         // Tidak ada filter tambahan untuk role tersebut
     }
 }
+

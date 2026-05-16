@@ -11,7 +11,6 @@ use Filament\Resources\Resource;
 use Filament\Forms\Components\FileUpload;
 use Illuminate\Database\Eloquent\Builder;
 use App\Filament\Resources\DocumentResource\Pages;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 use App\Filament\Resources\DocumentResource\RelationManagers;
 use Filament\Notifications\Notification;
 
@@ -37,7 +36,7 @@ class DocumentResource extends Resource
                     ->maxLength(255)
                     ->helperText('Contoh: Laporan Keselamatan Kerja Bulan Januari 2026')
                     ->columnSpanFull(),
-                Forms\Components\Select::make('document_type')
+                Forms\Components\Select::make('tipe_dokumen')
                     ->label('Tipe Dokumen')
                     ->options([
                         'hsse' => 'HSSE (Health, Safety, Security & Environment)',
@@ -77,7 +76,7 @@ class DocumentResource extends Resource
                     ->label('Nama Mitra')
                     ->searchable()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('document_type')
+                Tables\Columns\TextColumn::make('tipe_dokumen')
                     ->label('Tipe Dokumen')
                     ->badge()
                     ->color(fn(string $state): string => match ($state) {
@@ -102,8 +101,8 @@ class DocumentResource extends Resource
                     ->label('Status')
                     ->badge()
                     ->state(function (Document $record): string {
-                        // Return status sesuai document_type
-                        return $record->document_type === 'hsse'
+                        // Return status sesuai tipe_dokumen
+                        return $record->tipe_dokumen === 'hsse'
                             ? $record->hsse_status
                             : $record->crm_status;
                     })
@@ -124,33 +123,19 @@ class DocumentResource extends Resource
                         default => 'heroicon-o-question-mark-circle',
                     })
                     ->sortable(query: function ($query, string $direction): void {
-                        // Sort berdasarkan document_type
+                        // Sort berdasarkan tipe_dokumen
                         $query->orderByRaw("
                             CASE 
-                                WHEN document_type = 'hsse' THEN hsse_status 
+                                WHEN tipe_dokumen = 'hsse' THEN hsse_status 
                                 ELSE crm_status 
                             END {$direction}
                         ");
                     }),
-                Tables\Columns\TextColumn::make('HSSE.name')
-                    ->label('Nama HSSE')
-                    ->searchable()
-                    ->sortable()
-                    ->visible(fn($record) => $record && $record->document_type === 'hsse'),
-                Tables\Columns\TextColumn::make('crm.name')
-                    ->label('Nama CRM')
-                    ->searchable()
-                    ->sortable()
-                    ->visible(fn($record) => $record && $record->document_type === 'crm'),
                 Tables\Columns\TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('updated_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                Tables\Columns\TextColumn::make('deleted_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -171,12 +156,12 @@ class DocumentResource extends Resource
                         }
 
                         // Untuk dokumen HSSE, hanya cek hsse_status
-                        if ($record->document_type === 'hsse') {
+                        if ($record->tipe_dokumen === 'hsse') {
                             return $record->hsse_status === 'approved';
                         }
 
                         // Untuk dokumen CRM, hanya cek crm_status
-                        if ($record->document_type === 'crm') {
+                        if ($record->tipe_dokumen === 'crm') {
                             return $record->crm_status === 'approved';
                         }
 
@@ -194,14 +179,14 @@ class DocumentResource extends Resource
                         // Mitra can edit based on document type
                         if ($user->hasRole('Mitra')) {
                             // Untuk dokumen HSSE, hanya cek hsse_status
-                            if ($record->document_type === 'hsse') {
+                            if ($record->tipe_dokumen === 'hsse') {
                                 $status = $record->hsse_status;
                                 // Hanya bisa edit jika status revisi
                                 return $status === 'revisi';
                             }
 
                             // Untuk dokumen CRM, hanya cek crm_status
-                            if ($record->document_type === 'crm') {
+                            if ($record->tipe_dokumen === 'crm') {
                                 $status = $record->crm_status;
                                 return $status === 'revisi';
                             }
@@ -219,39 +204,23 @@ class DocumentResource extends Resource
                         // HSSE can only review HSSE documents
                         if ($user->hasRole('HSSE')) {
                             // Cek apakah dokumen adalah tipe HSSE
-                            if ($record->document_type !== 'hsse') {
+                            if ($record->tipe_dokumen !== 'hsse') {
                                 return false;
                             }
 
                             // Cek status
-                            if (!in_array($record->hsse_status, ['pending', 'reviewing'])) {
-                                return false;
-                            }
-
-                            // If a previous HSSE reviewer exists, only allow that same user
-                            if (!empty($record->id_hsse)) {
-                                return (int) $record->id_hsse === (int) $user->id;
-                            }
-                            // If no previous reviewer, allow first HSSE reviewer to claim
-                            return true;
+                            return in_array($record->hsse_status, ['pending', 'reviewing']);
                         }
 
                         // CRM can only review CRM documents
-                        elseif ($user->hasRole('CRM')) {
+                        if ($user->hasRole('CRM')) {
                             // Cek apakah dokumen adalah tipe CRM
-                            if ($record->document_type !== 'crm') {
+                            if ($record->tipe_dokumen !== 'crm') {
                                 return false;
                             }
 
                             // Cek status
-                            if (!in_array($record->crm_status, ['pending', 'reviewing'])) {
-                                return false;
-                            }
-
-                            if (!empty($record->id_crm)) {
-                                return (int) $record->id_crm === (int) $user->id;
-                            }
-                            return true;
+                            return in_array($record->crm_status, ['pending', 'reviewing']);
                         }
 
                         // Other roles cannot review
@@ -262,38 +231,9 @@ class DocumentResource extends Resource
                         $updateData = [];
 
                         if ($user->hasRole('HSSE')) {
-                            // If there is no assigned HSSE yet, assign this user; otherwise do not change
-                            if (empty($record->id_hsse)) {
-                                $updateData['id_hsse'] = $user->id;
-                                $updateData['hsse_review_started_at'] = now();
-                                $updateData['hsse_status'] = 'reviewing'; // Ubah status menjadi reviewing
-                            } elseif ((int) $record->id_hsse !== (int) $user->id) {
-                                Notification::make()
-                                    ->title('Akses Ditolak')
-                                    ->body('Dokumen ini hanya dapat direview oleh HSSE yang sebelumnya ditugaskan.')
-                                    ->danger()
-                                    ->send();
-                                return;
-                            } else {
-                                // Jika sudah assigned, tetap update status menjadi reviewing
-                                $updateData['hsse_status'] = 'reviewing';
-                            }
+                            $updateData['hsse_status'] = 'reviewing';
                         } elseif ($user->hasRole('CRM')) {
-                            if (empty($record->id_crm)) {
-                                $updateData['id_crm'] = $user->id;
-                                $updateData['crm_review_started_at'] = now();
-                                $updateData['crm_status'] = 'reviewing'; // Ubah status menjadi reviewing
-                            } elseif ((int) $record->id_crm !== (int) $user->id) {
-                                Notification::make()
-                                    ->title('Akses Ditolak')
-                                    ->body('Dokumen ini hanya dapat direview oleh CRM yang sebelumnya ditugaskan.')
-                                    ->danger()
-                                    ->send();
-                                return;
-                            } else {
-                                // Jika sudah assigned, tetap update status menjadi reviewing
-                                $updateData['crm_status'] = 'reviewing';
-                            }
+                            $updateData['crm_status'] = 'reviewing';
                         }
 
                         if (!empty($updateData)) {
@@ -338,44 +278,40 @@ class DocumentResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         $query = parent::getEloquentQuery()
-            ->withoutGlobalScopes([
-                SoftDeletingScope::class,
-            ])
-            // Hanya ambil kolom yang dibutuhkan tabel list — jangan fetch 'file' (path PDF)
+            // Hanya ambil kolom yang dibutuhkan tabel list — jangan fetch field tidak ada
             ->select([
-                'documents.id',
-                'documents.judul_dokumen',
-                'documents.document_type',
-                'documents.keterangan',
-                'documents.hsse_status',
-                'documents.crm_status',
-                'documents.id_mitra',
-                'documents.id_hsse',
-                'documents.id_crm',
-                'documents.created_at',
-                'documents.updated_at',
-                'documents.deleted_at',
-                'documents.file',
+                'document.id_document',
+                'document.id_user',
+                'document.judul_dokumen',
+                'document.tipe_dokumen',
+                'document.keterangan',
+                'document.hsse_status',
+                'document.crm_status',
+                'document.tanggal_upload',
+                'document.file',
             ])
-            ->with(['mitra:id,name', 'hsse:id,name', 'crm:id,name']);
+            ->with(['mitra:id_user,name']);
 
         $user = auth()->user();
 
-        // Jika user adalah Mitra, hanya tampilkan dokumen yang mereka buat
+        // Jika user adalah Mitra, hanya tampilkan dokumen yang mereka buat.
+        // Catatan: Document model sudah punya Global Scope MitraDocumentScope,
+        // jadi filter ini hanya diperlukan jika scope tidak aktif.
         if ($user && $user->hasRole('Mitra')) {
-            $query->where('id_mitra', $user->id);
+            $query->where('id_user', $user->id_user);
         }
 
         // Jika user adalah HSSE, hanya tampilkan dokumen tipe HSSE
         if ($user && $user->hasRole('HSSE')) {
-            $query->where('document_type', 'hsse');
+            $query->where('tipe_dokumen', 'hsse');
         }
 
         // Jika user adalah CRM, hanya tampilkan dokumen tipe CRM
         if ($user && $user->hasRole('CRM')) {
-            $query->where('document_type', 'crm');
+            $query->where('tipe_dokumen', 'crm');
         }
 
         return $query;
     }
 }
+

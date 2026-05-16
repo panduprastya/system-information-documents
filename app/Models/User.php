@@ -7,12 +7,17 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable, HasRoles;
+    use HasFactory, Notifiable;
+
+    protected $table = 'users';
+    protected $primaryKey = 'id_user';
+    public $incrementing = false;
+    protected $keyType = 'string';
+    public $timestamps = false;
 
     /**
      * The attributes that are mass assignable.
@@ -23,6 +28,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'id_role',
     ];
 
     /**
@@ -46,5 +52,18 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    public function role()
+    {
+        return $this->belongsTo(Role::class, 'id_role', 'id_role');
+    }
+
+    public function hasRole(string|array $role): bool
+    {
+        if (is_array($role)) {
+            return in_array($this->role?->name, $role);
+        }
+        return $this->role?->name === $role;
     }
 }

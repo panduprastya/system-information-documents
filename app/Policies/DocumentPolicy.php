@@ -32,7 +32,7 @@ class DocumentPolicy
 
         // Mitra hanya dapat melihat dokumen mereka sendiri
         if ($user->hasRole('Mitra')) {
-            return $document->id_mitra === $user->id;
+            return $document->id_user === $user->id_user;
         }
 
         return false;
@@ -59,7 +59,7 @@ class DocumentPolicy
 
         // Mitra hanya dapat mengedit dokumen mereka sendiri
         if ($user->hasRole('Mitra')) {
-            return $document->id_mitra === $user->id;
+            return $document->id_user === $user->id_user;
         }
 
         // HSSE dan CRM dapat mengedit dokumen
@@ -83,17 +83,17 @@ class DocumentPolicy
         // Mitra dapat menghapus dokumen mereka sendiri jika status masih pending
         if ($user->hasRole('Mitra')) {
             // Pastikan dokumen milik Mitra yang login
-            if ($document->id_mitra !== $user->id) {
+            if ($document->id_user !== $user->id_user) {
                 return false;
             }
 
             // Untuk dokumen HSSE, cek hsse_status
-            if ($document->document_type === 'hsse') {
+            if ($document->tipe_dokumen === 'hsse') {
                 return $document->hsse_status === 'pending';
             }
 
             // Untuk dokumen CRM, cek crm_status
-            if ($document->document_type === 'crm') {
+            if ($document->tipe_dokumen === 'crm') {
                 return $document->crm_status === 'pending';
             }
 
@@ -126,17 +126,17 @@ class DocumentPolicy
         // Mitra dapat force delete dokumen mereka sendiri jika status masih pending
         if ($user->hasRole('Mitra')) {
             // Pastikan dokumen milik Mitra yang login
-            if ($document->id_mitra !== $user->id) {
+            if ($document->id_user !== $user->id_user) {
                 return false;
             }
 
             // Untuk dokumen HSSE, cek hsse_status
-            if ($document->document_type === 'hsse') {
+            if ($document->tipe_dokumen === 'hsse') {
                 return $document->hsse_status === 'pending';
             }
 
             // Untuk dokumen CRM, cek crm_status
-            if ($document->document_type === 'crm') {
+            if ($document->tipe_dokumen === 'crm') {
                 return $document->crm_status === 'pending';
             }
 
@@ -150,7 +150,7 @@ class DocumentPolicy
     /**
      * Determine whether the user can sign the document.
      */
-    public function signDocument(User $user, Document $document, string $signatureType): bool
+    public function signDocument(User $user, document $document, string $signatureType): bool
     {
         // Check if user is authenticated
         if (!$user) {
@@ -167,20 +167,17 @@ class DocumentPolicy
             return false;
         }
 
-        // HSSE can only sign if they are assigned as HSSE reviewer
+        // HSSE can sign if the document is approved by HSSE
         if ($signatureType === 'hsse') {
-            return $user->hasRole('HSSE') &&
-                $document->id_hsse === $user->id &&
-                $document->hsse_status === 'approved';
+            return $user->hasRole('HSSE') && $document->hsse_status === 'approved';
         }
 
-        // CRM can only sign if they are assigned as CRM reviewer
+        // CRM can sign if the document is approved by CRM
         if ($signatureType === 'crm') {
-            return $user->hasRole('CRM') &&
-                $document->id_crm === $user->id &&
-                $document->crm_status === 'approved';
+            return $user->hasRole('CRM') && $document->crm_status === 'approved';
         }
 
         return false;
     }
 }
+

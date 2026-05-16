@@ -12,7 +12,7 @@ class DocumentObserver
      */
     public function creating(document $document): void
     {
-        $document->id_mitra = Auth()->id();
+        $document->id_user = Auth()->id();
         $document->tanggal_upload = now();
         //$document->hsse_id = auth()->id();
     }
@@ -66,3 +66,4 @@ class DocumentObserver
         //
     }
 }
+

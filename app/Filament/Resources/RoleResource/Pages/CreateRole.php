@@ -2,10 +2,9 @@
 
 namespace App\Filament\Resources\RoleResource\Pages;
 
-use Althinect\FilamentSpatieRolesPermissions\Resources\RoleResource\Pages\CreateRole as BaseCreateRole;
 use Filament\Resources\Pages\CreateRecord;
 
-class CreateRole extends BaseCreateRole
+class CreateRole extends CreateRecord
 {
     protected static string $resource = \App\Filament\Resources\RoleResource::class;
 

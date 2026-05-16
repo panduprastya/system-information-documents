@@ -21,22 +21,30 @@ class ViewDocument extends ViewRecord
 		$record = parent::resolveRecord($key);
 
 		// Eager load relationships to prevent N+1 queries
-		$record->load(['mitra', 'hsse', 'crm', 'hsseComments.user', 'crmComments.user']);
+		// Catatan: beberapa versi skema dapat membuat tabel comments berbeda.
+		// Agar tidak error saat tabel tidak ada, load dilakukan berdasarkan keberadaan tipe dokumen.
+		if ($record->tipe_dokumen === 'hsse') {
+			$record->load(['mitra', 'hsseComments.user']);
+		} elseif ($record->tipe_dokumen === 'crm') {
+			$record->load(['mitra', 'crmComments.user']);
+		} else {
+			$record->load(['mitra']);
+		}
 
 		$user = auth()->user();
 
 		// Jika user adalah Mitra, pastikan mereka hanya dapat melihat dokumen mereka sendiri
-		if ($user && $user->hasRole('Mitra') && $record->id_mitra !== $user->id) {
+		if ($user && $user->hasRole('Mitra') && $record->id_user !== $user->id_user) {
 			abort(403, 'Anda tidak dapat melihat dokumen yang bukan milik Anda.');
 		}
 
 		// Jika user adalah HSSE, pastikan dokumen adalah tipe HSSE
-		if ($user && $user->hasRole('HSSE') && $record->document_type !== 'hsse') {
+		if ($user && $user->hasRole('HSSE') && $record->tipe_dokumen !== 'hsse') {
 			abort(403, 'Anda tidak memiliki akses ke dokumen CRM.');
 		}
 
 		// Jika user adalah CRM, pastikan dokumen adalah tipe CRM
-		if ($user && $user->hasRole('CRM') && $record->document_type !== 'crm') {
+		if ($user && $user->hasRole('CRM') && $record->tipe_dokumen !== 'crm') {
 			abort(403, 'Anda tidak memiliki akses ke dokumen HSSE.');
 		}
 
@@ -69,11 +77,11 @@ class ViewDocument extends ViewRecord
 					}
 					// Mitra can edit ONLY if status is revisi
 					if ($isMitra) {
-						if ($this->record->document_type === 'hsse') {
+						if ($this->record->tipe_dokumen === 'hsse') {
 							return $this->record->hsse_status === 'revisi';
 						}
 
-						if ($this->record->document_type === 'crm') {
+						if ($this->record->tipe_dokumen === 'crm') {
 							return $this->record->crm_status === 'revisi';
 						}
 					}
@@ -93,12 +101,12 @@ class ViewDocument extends ViewRecord
 					}
 
 					// Untuk dokumen HSSE, hanya cek hsse_status
-					if ($this->record->document_type === 'hsse') {
+					if ($this->record->tipe_dokumen === 'hsse') {
 						return $this->record->hsse_status === 'approved';
 					}
 
 					// Untuk dokumen CRM, hanya cek crm_status
-					if ($this->record->document_type === 'crm') {
+					if ($this->record->tipe_dokumen === 'crm') {
 						return $this->record->crm_status === 'approved';
 					}
 
@@ -134,11 +142,11 @@ class ViewDocument extends ViewRecord
 					}
 
 					// Check if document is fully approved
-					if ($this->record->document_type === 'hsse') {
+					if ($this->record->tipe_dokumen === 'hsse') {
 						return $this->record->hsse_status === 'approved';
 					}
 
-					if ($this->record->document_type === 'crm') {
+					if ($this->record->tipe_dokumen === 'crm') {
 						return $this->record->crm_status === 'approved';
 					}
 
@@ -158,9 +166,9 @@ class ViewDocument extends ViewRecord
 
 					$user = auth()->user();
 					if ($user->hasRole('HSSE')) {
-						return in_array($this->record->hsse_status, ['pending', 'reviewing']) && (empty($this->record->id_hsse) || (int) $this->record->id_hsse === (int) $user->id);
+						return in_array($this->record->hsse_status, ['pending', 'reviewing']);
 					} elseif ($user->hasRole('CRM')) {
-						return in_array($this->record->crm_status, ['pending', 'reviewing']) && (empty($this->record->id_crm) || (int) $this->record->id_crm === (int) $user->id);
+						return in_array($this->record->crm_status, ['pending', 'reviewing']);
 					}
 					return false;
 				}),
@@ -179,31 +187,22 @@ class ViewDocument extends ViewRecord
 					$user = auth()->user();
 
 					if ($user->hasRole('HSSE')) {
-						if (empty($record->id_hsse)) {
-							$record->id_hsse = $user->id;
+							$record->hsse_status = 'approved';
+							$record->save();
+
+							\Filament\Notifications\Notification::make()
+								->title('Document HSSE Status Approved')
+								->success()
+								->send();
+						} elseif ($user->hasRole('CRM')) {
+							$record->crm_status = 'approved';
+							$record->save();
+
+							\Filament\Notifications\Notification::make()
+								->title('Document CRM Status Approved')
+								->success()
+								->send();
 						}
-						$record->hsse_status = 'approved';
-						$record->id_hsse = $user->id;
-						$record->save();
-
-						\Filament\Notifications\Notification::make()
-							->title('Document HSSE Status Approved')
-							->success()
-							->send();
-					} elseif ($user->hasRole('CRM')) {
-						if (empty($record->id_crm)) {
-							$record->id_crm = $user->id;
-						}
-						$record->crm_status = 'approved';
-						$record->id_crm = $user->id;
-						$record->save();
-
-						\Filament\Notifications\Notification::make()
-							->title('Document CRM Status Approved')
-							->success()
-							->send();
-					}
-
 					return redirect()->to('/admin/documents');
 				})
 				->visible(function () use ($isMitra) {
@@ -217,11 +216,9 @@ class ViewDocument extends ViewRecord
 						return false;
 
 					if ($user->hasRole('HSSE')) {
-						return in_array($this->record->hsse_status, ['pending', 'reviewing'])
-							&& (empty($this->record->id_hsse) || (int) $this->record->id_hsse === (int) $user->id);
+						return in_array($this->record->hsse_status, ['pending', 'reviewing']);
 					} elseif ($user->hasRole('CRM')) {
-						return in_array($this->record->crm_status, ['pending', 'reviewing'])
-							&& (empty($this->record->id_crm) || (int) $this->record->id_crm === (int) $user->id);
+						return in_array($this->record->crm_status, ['pending', 'reviewing']);
 					}
 					return false;
 				}),
@@ -239,7 +236,7 @@ class ViewDocument extends ViewRecord
 							->label('Judul Dokumen'),
 						TextEntry::make('mitra.name')
 							->label('Nama Mitra'),
-						TextEntry::make('document_type')
+						TextEntry::make('tipe_dokumen')
 							->label('Tipe Dokumen')
 							->badge()
 							->color(fn(string $state): string => match ($state) {
@@ -262,7 +259,7 @@ class ViewDocument extends ViewRecord
 								'rejected' => 'danger',
 								'revisi' => 'info',
 							})
-							->visible(fn($record) => $record->document_type === 'hsse'),
+							->visible(fn($record) => $record->tipe_dokumen === 'hsse'),
 						TextEntry::make('crm_status')
 							->label('Status CRM')
 							->badge()
@@ -273,7 +270,7 @@ class ViewDocument extends ViewRecord
 								'rejected' => 'danger',
 								'revisi' => 'info',
 							})
-							->visible(fn($record) => $record->document_type === 'crm'),
+							->visible(fn($record) => $record->tipe_dokumen === 'crm'),
 
 						TextEntry::make('keterangan')
 							->label('Keterangan Dokumen')
@@ -310,7 +307,7 @@ class ViewDocument extends ViewRecord
 							])
 							->columns(2),
 					])
-					->visible(fn($record) => $record->document_type === 'hsse'),
+					->visible(fn($record) => $record->tipe_dokumen === 'hsse'),
 
 				Section::make('Komentar CRM')
 					->schema([
@@ -330,7 +327,7 @@ class ViewDocument extends ViewRecord
 							])
 							->columns(2),
 					])
-					->visible(fn($record) => $record->document_type === 'crm'),
+					->visible(fn($record) => $record->tipe_dokumen === 'crm'),
 
 
 			]);

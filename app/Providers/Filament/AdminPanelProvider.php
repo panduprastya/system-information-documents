@@ -4,7 +4,6 @@ namespace App\Providers\Filament;
 
 use Filament\Pages;
 use Filament\Panel;
-use Filament\Widgets;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
 use Filament\Http\Middleware\Authenticate;
@@ -37,13 +36,6 @@ class AdminPanelProvider extends PanelProvider
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
             ->pages([
                 // Pages\Dashboard::class,
-            ])
-            // Widget discovery dinonaktifkan sementara — dashboard belum digunakan
-            // ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
-            ->widgets([
-                // \App\Filament\Widgets\DocumentStatsOverview::class,
-                // \App\Filament\Widgets\DocumentStatusChart::class,
-                // \App\Filament\Widgets\DocumentStatusPieChart::class,
             ])
             ->middleware([
                 EncryptCookies::class,

@@ -29,12 +29,12 @@ class EditDocument extends EditRecord
         $record = parent::resolveRecord($key);
 
         // Eager load relationships to prevent N+1 queries
-        $record->load(['mitra', 'hsse', 'crm', 'hsseComments.user', 'crmComments.user']);
+        $record->load(['mitra', 'hsseComments.user', 'crmComments.user']);
 
         $user = auth()->user();
 
         // Jika user adalah Mitra, pastikan mereka hanya dapat mengedit dokumen mereka sendiri
-        if ($user && $user->hasRole('Mitra') && $record->id_mitra !== $user->id) {
+        if ($user && $user->hasRole('Mitra') && $record->id_user !== $user->id_user) {
             abort(403, 'Anda tidak dapat mengedit dokumen yang bukan milik Anda.');
         }
 
@@ -60,9 +60,9 @@ class EditDocument extends EditRecord
     {
         $user = auth()->user();
 
-        // Jika user adalah Mitra, pastikan id_mitra tidak berubah
+        // Jika user adalah Mitra, pastikan id_user tidak berubah
         if ($user && $user->hasRole('Mitra')) {
-            $data['id_mitra'] = $user->id;
+            $data['id_user'] = $user->id_user;
         }
 
         return $data;
@@ -209,7 +209,7 @@ class EditDocument extends EditRecord
                                             return 'Status tidak tersedia';
 
                                         // Untuk dokumen HSSE, hanya tampilkan HSSE status
-                                        if ($record->document_type === 'hsse') {
+                                        if ($record->tipe_dokumen === 'hsse') {
                                             $hsseColor = match ($record->hsse_status) {
                                                 'approved' => 'bg-green-100 text-green-800 border-green-200',
                                                 'rejected' => 'bg-red-100 text-red-800 border-red-200',
@@ -227,7 +227,7 @@ class EditDocument extends EditRecord
                                         }
 
                                         // Untuk dokumen CRM, hanya tampilkan CRM status
-                                        if ($record->document_type === 'crm') {
+                                        if ($record->tipe_dokumen === 'crm') {
                                             $crmColor = match ($record->crm_status) {
                                                 'approved' => 'bg-green-100 text-green-800 border-green-200',
                                                 'rejected' => 'bg-red-100 text-red-800 border-red-200',
@@ -302,7 +302,7 @@ class EditDocument extends EditRecord
                                     ->columnSpanFull(),
                             ])
                             ->columnSpan(['lg' => 2])
-                            ->visible(fn($record) => $record && $record->document_type === 'hsse'),
+                            ->visible(fn($record) => $record && $record->tipe_dokumen === 'hsse'),
 
                         Section::make('CRM Comments')
                             ->schema([
@@ -337,7 +337,7 @@ class EditDocument extends EditRecord
                                     ->columnSpanFull(),
                             ])
                             ->columnSpan(['lg' => 2])
-                            ->visible(fn($record) => $record && $record->document_type === 'crm'),
+                            ->visible(fn($record) => $record && $record->tipe_dokumen === 'crm'),
                     ]),
             ]);
     }
@@ -370,10 +370,8 @@ class EditDocument extends EditRecord
                 $statusChanged = true;
             }
 
-            // Reset review timestamps jika status berubah (tetap pertahankan id_hsse dan id_crm)
             if ($statusChanged) {
-                $record->hsse_review_started_at = null;
-                $record->crm_review_started_at = null;
+                // Tidak menyimpan timestamp review tambahan karena tabel dokumen tidak memiliki kolom tersebut
             }
 
             $record->save();
@@ -399,15 +397,15 @@ class EditDocument extends EditRecord
         // Save new HSSE comment if provided and user has HSSE role
         if (!empty($newHsseComment) && $currentUser->hasRole('HSSE')) {
             HsseComment::create([
-                'document_id' => $record->getKey(),
-                'user_id' => $currentUserId,
+                'id_hsse_comment' => 'HC' . strtoupper(\Illuminate\Support\Str::random(8)),
+                'id_document' => $record->getKey(),
+                'id_user' => $currentUserId,
                 'komentar' => $newHsseComment,
             ]);
 
-            // Update HSSE status to revisi and set HSSE user when comment is saved
+            // Update HSSE status to revisi when comment is saved
             $record->update([
                 'hsse_status' => 'revisi',
-                'id_hsse' => $currentUserId
             ]);
 
             // Tampilkan notifikasi atau pesan bahwa HSSE telah memberikan revisi
@@ -421,15 +419,15 @@ class EditDocument extends EditRecord
         // Save new CRM comment if provided and user has S&D role
         if (!empty($newCrmComment) && $currentUser->hasRole('CRM')) {
             CrmComment::create([
-                'document_id' => $record->getKey(),
-                'user_id' => $currentUserId,
+                'id_crm_comment' => 'CC' . strtoupper(\Illuminate\Support\Str::random(8)),
+                'id_document' => $record->getKey(),
+                'id_user' => $currentUserId,
                 'komentar' => $newCrmComment,
             ]);
 
-            // Update CRM status to revisi and set S&D user when comment is saved
+            // Update CRM status to revisi when comment is saved
             $record->update([
                 'crm_status' => 'revisi',
-                'id_crm' => $currentUserId
             ]);
 
             // Tampilkan notifikasi atau pesan bahwa S&D telah memberikan revisi
@@ -443,3 +441,4 @@ class EditDocument extends EditRecord
         return $record;
     }
 }
+

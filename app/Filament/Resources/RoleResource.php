@@ -2,14 +2,17 @@
 
 namespace App\Filament\Resources;
 
-use Althinect\FilamentSpatieRolesPermissions\Resources\RoleResource as BaseRoleResource;
+use App\Models\Role;
+use Filament\Forms;
+use Filament\Forms\Form;
+use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 
-class RoleResource extends BaseRoleResource
+class RoleResource extends Resource
 {
+    protected static ?string $model = Role::class;
     protected static ?string $navigationGroup = null;
-
     protected static ?int $navigationSort = 3;
 
     public static function getNavigationGroup(): ?string
@@ -17,9 +20,44 @@ class RoleResource extends BaseRoleResource
         return null;
     }
 
+    public static function form(Form $form): Form
+    {
+        return $form
+            ->schema([
+                Forms\Components\TextInput::make('name')
+                    ->label('Role Name')
+                    ->required()
+                    ->maxLength(255)
+                    // Mencegah role duplikat (case-insensitive), misal: HSSE vs hsse
+                    ->default(fn () => null)
+                    ->rules([
+                        function (\Filament\Forms\Get $get) {
+                            $raw = (string) ($get('name') ?? '');
+                            $value = trim($raw);
+                            $lower = mb_strtolower($value);
+
+                            return function (string $attribute, $value, $fail) use ($lower) {
+                                if ($lower === '') {
+                                    return;
+                                }
+
+                                // Validasi case-insensitive pakai lower(name)
+                                $exists = \App\Models\Role::query()
+                                    ->whereRaw('LOWER(name) = ?', [$lower])
+                                    ->exists();
+
+                                if ($exists) {
+                                    $fail('Role sudah ada.');
+                                }
+                            };
+                        },
+                    ]),
+            ]);
+    }
+
     public static function table(Table $table): Table
     {
-        return parent::table($table)
+        return $table
             ->columns([
                 // Override ID column to show row numbers
                 Tables\Columns\TextColumn::make('row_number')
@@ -41,18 +79,6 @@ class RoleResource extends BaseRoleResource
                     ->label('Name')
                     ->searchable()
                     ->sortable(),
-
-                Tables\Columns\TextColumn::make('created_at')
-                    ->label('Created At')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-
-                Tables\Columns\TextColumn::make('updated_at')
-                    ->label('Updated At')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),

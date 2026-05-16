@@ -2,10 +2,10 @@
 
 namespace App\Filament\Resources\RoleResource\Pages;
 
-use Althinect\FilamentSpatieRolesPermissions\Resources\RoleResource\Pages\ListRoles as BaseListRoles;
 use Filament\Actions;
+use Filament\Resources\Pages\ListRecords;
 
-class ListRoles extends BaseListRoles
+class ListRoles extends ListRecords
 {
     protected static string $resource = \App\Filament\Resources\RoleResource::class;
 

@@ -2,13 +2,13 @@
 
 namespace App\Providers;
 
+use App\Models\Role;
 use App\Models\User;
 use App\Models\document;
 use App\Policies\RolePolicy;
 use App\Policies\userPolicy;
 use App\Policies\PermissionPolicy;
 use App\Policies\DocumentPolicy;
-use Spatie\Permission\Models\Role;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;

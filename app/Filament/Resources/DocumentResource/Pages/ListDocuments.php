@@ -25,23 +25,23 @@ class ListDocuments extends ListRecords
             'All' => \Filament\Resources\Components\Tab::make('All'),
             'Pending' => \Filament\Resources\Components\Tab::make('Pending')
                 ->modifyQueryUsing(fn (\Illuminate\Database\Eloquent\Builder $query) => $query->where(function ($q) {
-                    $q->where(fn($q2) => $q2->where('document_type', 'hsse')->where('hsse_status', 'pending'))
-                      ->orWhere(fn($q2) => $q2->where('document_type', 'crm')->where('crm_status', 'pending'));
+                    $q->where(fn($q2) => $q2->where('tipe_dokumen', 'hsse')->where('hsse_status', 'pending'))
+                      ->orWhere(fn($q2) => $q2->where('tipe_dokumen', 'crm')->where('crm_status', 'pending'));
                 })),
             'Reviewing' => \Filament\Resources\Components\Tab::make('Reviewing')
                 ->modifyQueryUsing(fn (\Illuminate\Database\Eloquent\Builder $query) => $query->where(function ($q) {
-                    $q->where(fn($q2) => $q2->where('document_type', 'hsse')->where('hsse_status', 'reviewing'))
-                      ->orWhere(fn($q2) => $q2->where('document_type', 'crm')->where('crm_status', 'reviewing'));
+                    $q->where(fn($q2) => $q2->where('tipe_dokumen', 'hsse')->where('hsse_status', 'reviewing'))
+                      ->orWhere(fn($q2) => $q2->where('tipe_dokumen', 'crm')->where('crm_status', 'reviewing'));
                 })),
             'Revisi' => \Filament\Resources\Components\Tab::make('Revisi')
                 ->modifyQueryUsing(fn (\Illuminate\Database\Eloquent\Builder $query) => $query->where(function ($q) {
-                    $q->where(fn($q2) => $q2->where('document_type', 'hsse')->where('hsse_status', 'revisi'))
-                      ->orWhere(fn($q2) => $q2->where('document_type', 'crm')->where('crm_status', 'revisi'));
+                    $q->where(fn($q2) => $q2->where('tipe_dokumen', 'hsse')->where('hsse_status', 'revisi'))
+                      ->orWhere(fn($q2) => $q2->where('tipe_dokumen', 'crm')->where('crm_status', 'revisi'));
                 })),
             'Approved' => \Filament\Resources\Components\Tab::make('Approved')
                 ->modifyQueryUsing(fn (\Illuminate\Database\Eloquent\Builder $query) => $query->where(function ($q) {
-                    $q->where(fn($q2) => $q2->where('document_type', 'hsse')->where('hsse_status', 'approved'))
-                      ->orWhere(fn($q2) => $q2->where('document_type', 'crm')->where('crm_status', 'approved'));
+                    $q->where(fn($q2) => $q2->where('tipe_dokumen', 'hsse')->where('hsse_status', 'approved'))
+                      ->orWhere(fn($q2) => $q2->where('tipe_dokumen', 'crm')->where('crm_status', 'approved'));
                 })),
         ];
     }
@@ -49,9 +49,14 @@ class ListDocuments extends ListRecords
     public function getDefaultActiveTab(): string | int | null
     {
         $user = auth()->user();
+
         if ($user && ($user->hasRole('HSSE') || $user->hasRole('CRM'))) {
             return 'Pending';
         }
+
+        // Untuk Mitra, tampilkan semua dulu agar dokumen tidak hilang
+        // (misal status Mitra bisa "pending" atau selainnya saat reload)
         return 'All';
     }
 }
+

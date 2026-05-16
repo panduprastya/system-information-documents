@@ -1,8 +1,9 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 use App\Http\Controllers\DocumentDownloadController;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Route;
 
 
 Route::get('/', function () {
@@ -55,4 +56,20 @@ Route::get('/documents/verify/{id}', function ($id) {
             : $document->crm_status === 'approved',
     ]);
 })->name('document.verify');
+
+Route::get('/dev-login-admin', function () {
+    if (! app()->environment('local')) {
+        abort(404);
+    }
+
+    $user = \App\Models\User::where('email', 'admin@gmail.com')->first();
+
+    if (! $user) {
+        abort(404, 'Admin user not found');
+    }
+
+    Auth::login($user);
+
+    return redirect('/admin');
+});
 

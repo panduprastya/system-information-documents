@@ -23,7 +23,7 @@ class DocumentDownloadController extends Controller
             abort(403, 'Hanya Mitra yang dapat mengunduh dokumen.');
         }
 
-        $type = strtolower(trim($document->document_type));
+        $type = strtolower(trim($document->tipe_dokumen));
         $isHsse = $type === 'hsse';
         $isCrm = $type === 'crm';
 
@@ -232,5 +232,6 @@ class DocumentDownloadController extends Controller
         return null;
     }
 }
+
 
 

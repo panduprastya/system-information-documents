@@ -38,9 +38,8 @@ class UserResource extends Resource
                         'email' => 'Format email tidak valid.',
                     ])
                     ->maxLength(255),
-                Select::make('roles')->multiple()->relationship('roles', 'name')
+                Select::make('id_role')->relationship('role', 'name')
                     ->preload()
-                    ->maxItems(1)
                     ->required()
                     ->validationMessages([
                         'required' => 'Kolom role wajib dipilih.',
@@ -69,15 +68,7 @@ class UserResource extends Resource
                     ->searchable(),
                 Tables\Columns\TextColumn::make('email')
                     ->searchable(),
-                Tables\Columns\TextColumn::make('roles.name'),
-                Tables\Columns\TextColumn::make('created_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                Tables\Columns\TextColumn::make('updated_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('role.name'),
             ])
 
 
@@ -123,6 +114,6 @@ class UserResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
-            ->with('roles');
+            ->with('role');
     }
 }
